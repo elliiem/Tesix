@@ -32,8 +32,8 @@ struct ArrayList;
 
 template<typename T>
 struct ArrayList<T, Dynamic> {
-    T* buffer       = nullptr;
-    size_t len      = 0;
+    T* ptr = nullptr;
+    size_t len = 0;
     size_t capacity = 0;
 
     //  TODO: ? shold I keep having init be its own function
@@ -44,25 +44,25 @@ struct ArrayList<T, Dynamic> {
     }
 
     ~ArrayList() {
-        if(buffer != nullptr) {
-            free(buffer);
+        if(ptr != nullptr) {
+            free(ptr);
         }
     }
 
     void reserve(const size_t exp) {
-        assert(buffer == nullptr);
+        assert(ptr == nullptr);
 
         const size_t size = pow2(exp);
 
-        buffer = static_cast<T*>(malloc(sizeof(T) * size));
-        if(buffer == nullptr) exit(1);
+        ptr = static_cast<T*>(malloc(sizeof(T) * size));
+        if(ptr == nullptr) exit(1);
 
         capacity = size;
     }
 
     void reserveExact(const size_t size) {
-        buffer = static_cast<T*>(malloc(sizeof(T) * size));
-        if(buffer == nullptr) exit(1);
+        ptr = static_cast<T*>(malloc(sizeof(T) * size));
+        if(ptr == nullptr) exit(1);
 
         capacity = size;
     }
@@ -88,7 +88,7 @@ struct ArrayList<T, Dynamic> {
     inline void pop(const size_t index) {
         assert(index < len);
 
-        memmove(buffer + index, buffer + index + 1, (len - index) * sizeof(T));
+        memmove(ptr + index, ptr + index + 1, (len - index) * sizeof(T));
 
         len -= 1;
     }
@@ -110,7 +110,7 @@ struct ArrayList<T, Dynamic> {
     inline void appendAssume(const T item) {
         assert(len < capacity);
 
-        buffer[len] = item;
+        ptr[len] = item;
         len += 1;
     }
 
@@ -118,7 +118,7 @@ struct ArrayList<T, Dynamic> {
         assert(len + n < capacity);
 
         for(size_t i = 0; i < n; i++) {
-            buffer[i + len] = items[i];
+            ptr[i + len] = items[i];
         }
 
         len += n;
@@ -127,14 +127,14 @@ struct ArrayList<T, Dynamic> {
     inline void insertAssume(const T item, const size_t index) {
         assert(index < len && len < capacity);
 
-        memmove(buffer + index + 1, buffer + index, (len - index) * sizeof(T));
-        buffer[index] = item;
+        memmove(ptr + index + 1, ptr + index, (len - index) * sizeof(T));
+        ptr[index] = item;
 
         len += 1;
     }
 
     void expandCapacity(const size_t size) {
-        assert(buffer != nullptr); // call reserve before doing anything when initializing with the default constructor
+        assert(ptr != nullptr); // call reserve before doing anything when initializing with the default constructor
 
         if(size > capacity) {
             realloc(pow2(getExponent(size)));
@@ -142,15 +142,15 @@ struct ArrayList<T, Dynamic> {
     }
 
     void expandCapacityNoCopy(const size_t size) {
-        assert(buffer != nullptr); // call reserve before doing anything when initializing with the default constructor
+        assert(ptr != nullptr); // call reserve before doing anything when initializing with the default constructor
 
         if(size > capacity) {
             reallocNoCopy(pow2(getExponent(size)));
         }
     }
-    
+
     void expandCapacityExact(const size_t size) {
-        assert(buffer != nullptr); // call reserve before doing anything when initializing with the default constructor
+        assert(ptr != nullptr); // call reserve before doing anything when initializing with the default constructor
 
         if(size > capacity) {
             realloc(size);
@@ -158,7 +158,7 @@ struct ArrayList<T, Dynamic> {
     }
 
     void expandCapacityExactNoCopy(const size_t size) {
-        assert(buffer != nullptr); // call reserve before doing anything when initializing with the default constructor
+        assert(ptr != nullptr); // call reserve before doing anything when initializing with the default constructor
 
         if(size > capacity) {
             reallocNoCopy(size);
@@ -170,35 +170,35 @@ struct ArrayList<T, Dynamic> {
     }
 
     void realloc(const size_t size) {
-        assert(!(buffer == nullptr && len > 0));
+        assert(!(ptr == nullptr && len > 0));
 
         T* new_ptr = static_cast<T*>(malloc(sizeof(T) * size));
         if(new_ptr == nullptr) exit(1);
 
-        memcpy(new_ptr, buffer, len * sizeof(T));
-        free(buffer);
+        memcpy(new_ptr, ptr, len * sizeof(T));
+        free(ptr);
 
-        buffer   = new_ptr;
+        ptr = new_ptr;
         capacity = size;
     }
- 
+
     void reallocNoCopy(const size_t size) {
-        assert(!(buffer == nullptr && len > 0));
+        assert(!(ptr == nullptr && len > 0));
 
         T* new_ptr = static_cast<T*>(malloc(sizeof(T) * size));
         if(new_ptr == nullptr) exit(1);
 
-        free(buffer);
+        free(ptr);
 
-        buffer   = new_ptr;
+        ptr = new_ptr;
         capacity = size;
     }
 };
 
 template<typename T>
 struct ArrayList<T, Static> {
-    T* buffer       = nullptr;
-    size_t len      = 0;
+    T* ptr = nullptr;
+    size_t len = 0;
     size_t capacity = 0;
 
     ArrayList() = default;
@@ -208,22 +208,22 @@ struct ArrayList<T, Static> {
     }
 
     ~ArrayList() {
-        if(buffer != nullptr) {
-            free(buffer);
+        if(ptr != nullptr) {
+            free(ptr);
         }
     }
 
     void reserve(const size_t size) {
-        assert(buffer == nullptr); // should be a fresh array
+        assert(ptr == nullptr); // should be a fresh array
 
-        buffer   = static_cast<uint8_t*>(malloc(size));
+        ptr = static_cast<uint8_t*>(malloc(size));
         capacity = size;
     }
 
     void append(const T item) {
         assert(len < capacity);
 
-        buffer[len] = item;
+        ptr[len] = item;
         len += 1;
     }
 
@@ -231,7 +231,7 @@ struct ArrayList<T, Static> {
         assert(len + n < capacity);
 
         for(size_t i = 0; i < n; i++) {
-            buffer[len + i] = items[i];
+            ptr[len + i] = items[i];
         }
 
         len += n;
@@ -240,15 +240,15 @@ struct ArrayList<T, Static> {
     void insert(const T item, const size_t index) {
         assert(index < len && len < capacity);
 
-        memmove(buffer + index + 1, buffer + index, (len - index) * sizeof(T));
-        buffer[index] = item;
+        memmove(ptr + index + 1, ptr + index, (len - index) * sizeof(T));
+        ptr[index] = item;
 
         len += 1;
     }
     inline void pop(const size_t index) {
         assert(index < len);
 
-        memmove(buffer + index, buffer + index + 1, (len - index) * sizeof(T));
+        memmove(ptr + index, ptr + index + 1, (len - index) * sizeof(T));
 
         len -= 1;
     }

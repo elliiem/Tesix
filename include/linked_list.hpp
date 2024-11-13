@@ -198,7 +198,7 @@ static bool isLoopingNodePath(Node<T>* front) {
 
     while(cur->next != nullptr) {
         for(size_t i = 0; i < known.len; i++) {
-            if(cur == known.buffer[i]) {
+            if(cur == known.ptr[i]) {
                 return true;
             }
         }
