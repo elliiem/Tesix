@@ -18,7 +18,7 @@ consteval size_t countBits() {
 
 template<typename T>
 constexpr inline bool isValidBitRange(const Range range) {
-    return countBits<T>() >= range._start + range._len;
+    return countBits<T>() >= range.start + range.len;
 }
 
 template<typename T>
@@ -104,18 +104,18 @@ constexpr inline size_t truncate(const size_t bits, const size_t count) {
 }
 
 template<typename T = size_t>
-constexpr inline T patternMask(const size_t pattern, const size_t pattern_len, size_t len = std::numeric_limits<size_t>::max()) {
+constexpr inline T patternMask(const size_t pattern, const size_t patternlen, size_t len = std::numeric_limits<size_t>::max()) {
     len = std::min(len, countBits<T>());
 
-    const size_t full_repeats = len / pattern_len;
+    const size_t full_repeats = len / patternlen;
 
     T ret = 0;
 
     for(size_t i = 0; i < full_repeats; i++) {
-        ret |= pattern << i * pattern_len;
+        ret |= pattern << i * patternlen;
     }
 
-    ret |= truncate(pattern, len - (full_repeats * pattern_len)) << full_repeats * pattern_len;
+    ret |= truncate(pattern, len - (full_repeats * patternlen)) << full_repeats * patternlen;
 
     return ret;
 }
@@ -123,19 +123,19 @@ constexpr inline T patternMask(const size_t pattern, const size_t pattern_len, s
 inline size_t rangeMask(const Range range) {
     assert(isValidBitRange<size_t>(range));
 
-    size_t lbits = countBits<size_t>() - (range._start + range._len);
-    size_t rbits = range._start;
+    size_t lbits = countBits<size_t>() - (range.start + range.len);
+    size_t rbits = range.start;
 
-    return cutoff(setMask(), lbits, rbits) << range._start;
+    return cutoff(setMask(), lbits, rbits) << range.start;
 }
 
 /**
  * @brief Takes the first range.len bits and moves them to the range
  */
 constexpr inline size_t valueMask(const size_t value, const Range range) {
-    size_t lbits = countBits<size_t>() - (range._start + range._len);
+    size_t lbits = countBits<size_t>() - (range.start + range.len);
 
-    return cutoff(value, lbits, 0) << range._start;
+    return cutoff(value, lbits, 0) << range.start;
 }
 
 constexpr inline bool getBit(const size_t bits, const size_t i) {
@@ -150,8 +150,8 @@ constexpr inline bool getBit(const size_t bits, const size_t i) {
 constexpr inline size_t getBits(const size_t bits, const Range range) {
     assert(isValidBitRange<size_t>(range));
 
-    const size_t lbits = countBits<size_t>() - (range._start + range._len);
-    const size_t rbits = range._start;
+    const size_t lbits = countBits<size_t>() - (range.start + range.len);
+    const size_t rbits = range.start;
 
     return cutoff(bits, lbits, rbits);
 }

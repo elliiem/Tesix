@@ -1,4 +1,5 @@
-// #include "../include/linked_list.hpp"
+#define _DEBUG
+
 #include "../include/codegen/intermediary.hpp"
 
 #include <cstdint>
@@ -18,25 +19,42 @@ int main() {
     enableRawMode();
 
     ArrayList<Tesix::ControlSeq::Instruction, Dynamic> esc(5);
+    esc.append(Tesix::ControlSeq::Instruction::createErase(Tesix::ControlSeq::EraseInstruction::createEraseDisplay(Tesix::ControlSeq::EraseDisplay::All)));
+    esc.append(Tesix::ControlSeq::Instruction::createCursor(Tesix::ControlSeq::CursorInstruction::createCursorTo( {.row = 1, .column = 1})));
+
+    Buffer2D<uint32_t> screen_buffer;
+
+    Tesix::Intermediary::State state = {
+        ._pos =
+            {
+                ._x = 0,
+                ._y = 0,
+            },
+        ._style = 0,
+        ._last_ch = ' ',
+        ._screen_buffer = screen_buffer,
+        ._term_area =
+            {
+                ._pos = {._x = 0, ._y = 0},
+                ._width = 128,
+                ._height = 90,
+            },
+    };
 
     Tesix::LinkedList<Tesix::Intermediary::Instruction> intermediary;
     intermediary.init();
 
-    intermediary.append(Tesix::Intermediary::Instruction::createInsertChar({.pos = {.x = 10, .y = 10}, .ch = 'x'}));
+    intermediary.append(Tesix::Intermediary::Instruction::createFillArea({._area = {._pos = {._x = 5, ._y = 5}, ._width = 8, ._height = 4}, ._ch = 'x'}));
 
-
-    Tesix::Intermediary::State state;
     Tesix::Intermediary::submit(intermediary, esc, state);
+
+    esc.append(Tesix::ControlSeq::Instruction::createCursor(Tesix::ControlSeq::CursorInstruction::createCursorTo( {.row = 1, .column = 90})));
 
     ArrayList<uint8_t, Dynamic> out(10);
 
-    // FILE* file = fopen("out","w");
+    FILE* file = fopen("out", "w");
 
-    Tesix::ControlSeq::submit(esc, out);
+    Tesix::ControlSeq::submit(esc, out, STDOUT_FILENO, file->_fileno);
 
-    // close(file->_fileno);
-
-    while(true) {
-
-    }
+    close(file->_fileno);
 }

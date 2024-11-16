@@ -115,7 +115,7 @@ struct ArrayList<T, Dynamic> {
     }
 
     inline void appendArrayAssume(const T* items, const size_t n) {
-        assert(len + n < capacity);
+        assert(len + n <= capacity);
 
         for(size_t i = 0; i < n; i++) {
             ptr[i + len] = items[i];

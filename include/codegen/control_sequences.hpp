@@ -10,7 +10,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <iterator>
 #include <stdexcept>
 #include <sys/types.h>
 #include <unistd.h>
@@ -18,6 +17,24 @@
 namespace Tesix {
 
 namespace ControlSeq {
+
+#ifdef _DEBUG
+    #define callEnsureSpace(size, buffer, out_fd, debug_out_fd) ensureSpace(size, buffer, out_fd, debug_out_fd)
+    #define callFlushBuffer(buffer, out_fd, debug_out_fd) flushBuffer(buffer, out_fd, debug_out_fd)
+    #define callSubmitCursor(instr, buffer, out_fd, debug_out_fd) submitCursor(instr, buffer, out_fd, debug_out_fd)
+    #define callSubmitErase(instr, buffer, out_fd, debug_out_fd) submitErase(instr, buffer, out_fd, debug_out_fd)
+    #define callSubmitPalette(instr, buffer, out_fd, debug_out_fd) submitPalette(instr, buffer, out_fd, debug_out_fd)
+    #define callSubmitInsert(instr, buffer, out_fd, debug_out_fd) submitInsert(instr, buffer, out_fd, debug_out_fd)
+    #define callSubmitStyle(instr, buffer, out_fd, debug_out_fd) submitStyle(instr, buffer, out_fd, debug_out_fd)
+#else
+    #define callEnsureSpace(size, buffer, out_fd, debug_out_fd) ensureSpace(size, buffer, out_fd)
+    #define callFlushBuffer(buffer, out_fd, debug_out_fd) flushBuffer(buffer, out_fd)
+    #define callSubmitCursor(instr, buffer, out_fd, debug_out_fd) submitCursor(instr, buffer, out_fd)
+    #define callSubmitErase(instr, buffer, out_fd, debug_out_fd) submitErase(instr, buffer, out_fd)
+    #define callSubmitPalette(instr, buffer, out_fd, debug_out_fd) submitPalette(instr, buffer, out_fd)
+    #define callSubmitInsert(instr, buffer, out_fd, debug_out_fd) submitInsert(instr, buffer, out_fd)
+    #define callSubmitStyle(instr, buffer, out_fd, debug_out_fd) submitStyle(instr, buffer, out_fd)
+#endif
 
 consteval uint8_t decodeRowColumn(const size_t row, const size_t column) {
     return (unsetMask() | valueMask(column, Range::fromFor(0, 4))) | valueMask(row, Range::fromFor(4, 4));
@@ -36,8 +53,8 @@ constexpr uint8_t CUU = decodeRowColumn(4, 1);
 constexpr uint8_t CUD = decodeRowColumn(4, 2);
 constexpr uint8_t CUF = decodeRowColumn(4, 3);
 constexpr uint8_t CUB = decodeRowColumn(4, 4);
-constexpr uint8_t CPL = decodeRowColumn(4, 5);
-constexpr uint8_t CNL = decodeRowColumn(4, 6);
+constexpr uint8_t CNL = decodeRowColumn(4, 5);
+constexpr uint8_t CPL = decodeRowColumn(4, 6);
 constexpr uint8_t CHA = decodeRowColumn(4, 7);
 constexpr uint8_t CUP = decodeRowColumn(4, 8);
 constexpr uint8_t ED = decodeRowColumn(4, 10);
@@ -85,39 +102,65 @@ static inline void writeParameter(const size_t value, T& buffer) {
     buffer.len += sprintf(reinterpret_cast<char*>(buffer.ptr + buffer.len), "%lu", value);
 }
 
+#ifdef _DEBUG
 template<TypeArrayList<uint8_t> T>
-static inline void flushBuffer(T& buffer, size_t out_fd) {
+static inline void flushBuffer(T& buffer, const size_t out_fd, const size_t debug_out_fd) {
+#else
+template<TypeArrayList<uint8_t> T>
+static inline void flushBuffer(T& buffer, const size_t out_fd) {
+#endif
     write(out_fd, buffer.ptr, buffer.len);
+
+    #ifdef _DEBUG
+        write(debug_out_fd, buffer.ptr, buffer.len);
+    #endif
 
     buffer.clear();
 }
 
+#ifdef _DEBUG
 template<TypeArrayList<uint8_t> T>
-static inline void ensureSpace(const size_t space, T& buffer, size_t out_fd);
+static inline void ensureSpace(const size_t space, T& buffer, const size_t out_fd, const size_t debug_out_fd);
+#else
+template<TypeArrayList<uint8_t> T>
+static inline void ensureSpace(const size_t space, T& buffer, const size_t out_fd);
+#endif
 
+#ifdef _DEBUG
+template<>
+inline void ensureSpace<ArrayList<uint8_t, Dynamic>>(
+    const size_t space, ArrayList<uint8_t, Dynamic>& buffer, size_t out_fd, const size_t debug_out_fd) {
+#else
 template<>
 inline void ensureSpace<ArrayList<uint8_t, Dynamic>>(const size_t space, ArrayList<uint8_t, Dynamic>& buffer, size_t out_fd) {
+#endif
     if(buffer.freeSpace() < space) {
         if(buffer.capacity < space) {
-            flushBuffer(buffer, out_fd);
+            callFlushBuffer(buffer, out_fd, debug_out_fd);
 
             buffer.expandCapacityNoCopy(space);
 
             return;
         }
 
-        flushBuffer(buffer, out_fd);
+        callFlushBuffer(buffer, out_fd, debug_out_fd);
     }
 }
 
+#ifdef _DEBUG
+template<>
+inline void ensureSpace<ArrayList<uint8_t, Static>>(
+    const size_t space, ArrayList<uint8_t, Static>& buffer, size_t out_fd, const size_t debug_out_fd) {
+#else
 template<>
 inline void ensureSpace<ArrayList<uint8_t, Static>>(const size_t space, ArrayList<uint8_t, Static>& buffer, size_t out_fd) {
+#endif
     if(buffer.freeSpace() < space) {
         if(buffer.capacity < space) {
             throw std::runtime_error("Not enough space in buffer");
         }
 
-        flushBuffer(buffer, out_fd);
+        callFlushBuffer(buffer, out_fd, debug_out_fd);
     }
 }
 
@@ -196,86 +239,91 @@ struct CursorInstruction {
     }
 };
 
+#ifdef _DEBUG
 template<TypeArrayList<uint8_t> T>
-static void submitCursor(const CursorInstruction& instr, T& buffer, size_t out_fd) {
+static void submitCursor(const CursorInstruction& instr, T& buffer, const size_t out_fd, const size_t debug_out_fd) {
+#else
+template<TypeArrayList<uint8_t> T>
+static void submitCursor(const CursorInstruction& instr, T& buffer, const size_t out_fd) {
+#endif
     switch(instr.type) {
         case CursorInstrType::Linefeed: {
-            ensureSpace(2, buffer, out_fd);
+            callEnsureSpace(2, buffer, out_fd, debug_out_fd);
 
             buffer.appendAssume(ESC);
             buffer.appendAssume(LF);
         } break;
         case CursorInstrType::ReverseLinefeed: {
-            ensureSpace(2, buffer, out_fd);
+            callEnsureSpace(2, buffer, out_fd, debug_out_fd);
 
             buffer.appendAssume(ESC);
             buffer.appendAssume(RI);
         } break;
         case CursorInstrType::Newline: {
-            ensureSpace(2, buffer, out_fd);
+            callEnsureSpace(2, buffer, out_fd, debug_out_fd);
 
             buffer.appendAssume(ESC);
             buffer.appendAssume(NEL);
 
         } break;
         case CursorInstrType::CursorUp: {
-            ensureSpace(3 + countDigits(instr.params.CursorUp), buffer, out_fd);
+            callEnsureSpace(3 + countDigits(instr.params.CursorUp), buffer, out_fd, debug_out_fd);
 
             writeCSI(buffer);
             writeParameter(instr.params.CursorUp, buffer);
             buffer.appendAssume(CUU);
         } break;
         case CursorInstrType::CursorDown: {
-            ensureSpace(3 + countDigits(instr.params.CursorDown), buffer, out_fd);
+            callEnsureSpace(3 + countDigits(instr.params.CursorDown), buffer, out_fd, debug_out_fd);
 
             writeCSI(buffer);
             writeParameter(instr.params.CursorDown, buffer);
             buffer.appendAssume(CUD);
         } break;
         case CursorInstrType::CursorRight: {
-            ensureSpace(3 + countDigits(instr.params.CursorRight), buffer, out_fd);
+            callEnsureSpace(3 + countDigits(instr.params.CursorRight), buffer, out_fd, debug_out_fd);
 
             writeCSI(buffer);
             writeParameter(instr.params.CursorRight, buffer);
             buffer.appendAssume(CUF);
         } break;
         case CursorInstrType::CursorLeft: {
-            ensureSpace(3 + countDigits(instr.params.CursorLeft), buffer, out_fd);
+            callEnsureSpace(3 + countDigits(instr.params.CursorLeft), buffer, out_fd, debug_out_fd);
 
             writeCSI(buffer);
             writeParameter(instr.params.CursorLeft, buffer);
             buffer.appendAssume(CUB);
         } break;
         case CursorInstrType::CursorUpBegin: {
-            ensureSpace(3 + countDigits(instr.params.CursorUpBegin), buffer, out_fd);
+            callEnsureSpace(3 + countDigits(instr.params.CursorUpBegin), buffer, out_fd, debug_out_fd);
 
             writeCSI(buffer);
             writeParameter(instr.params.CursorUpBegin, buffer);
             buffer.appendAssume(CPL);
         } break;
         case CursorInstrType::CursorDownBegin: {
-            ensureSpace(3 + countDigits(instr.params.CursorDownBegin), buffer, out_fd);
+            callEnsureSpace(3 + countDigits(instr.params.CursorDownBegin), buffer, out_fd, debug_out_fd);
 
             writeCSI(buffer);
             writeParameter(instr.params.CursorDownBegin, buffer);
             buffer.appendAssume(CNL);
         } break;
         case CursorInstrType::CursorRow: {
-            ensureSpace(3 + countDigits(instr.params.CursorRow), buffer, out_fd);
+            callEnsureSpace(3 + countDigits(instr.params.CursorRow), buffer, out_fd, debug_out_fd);
 
             writeCSI(buffer);
             writeParameter(instr.params.CursorRow, buffer);
             buffer.appendAssume(VPA);
         } break;
         case CursorInstrType::CursorColumn: {
-            ensureSpace(3 + countDigits(instr.params.CursorColumn), buffer, out_fd);
+            callEnsureSpace(3 + countDigits(instr.params.CursorColumn), buffer, out_fd, debug_out_fd);
 
             writeCSI(buffer);
             writeParameter(instr.params.CursorColumn, buffer);
             buffer.appendAssume(CHA);
         } break;
         case CursorInstrType::CursorTo: {
-            ensureSpace(4 + countDigits(instr.params.CursorTo.column) + countDigits(instr.params.CursorTo.row), buffer, out_fd);
+            callEnsureSpace(4 + countDigits(instr.params.CursorTo.column) + countDigits(instr.params.CursorTo.row), buffer, out_fd, debug_out_fd);
 
             writeCSI(buffer);
             writeParameter(instr.params.CursorTo.column, buffer);
@@ -284,14 +332,14 @@ static void submitCursor(const CursorInstruction& instr, T& buffer, size_t out_f
             buffer.appendAssume(CUP);
         } break;
         case CursorInstrType::SaveCursor: {
-            ensureSpace(2, buffer, out_fd);
+            callEnsureSpace(2, buffer, out_fd, debug_out_fd);
 
             writeCSI(buffer);
             buffer.appendAssume('s');
 
         } break;
         case CursorInstrType::RestoreCursor: {
-            ensureSpace(2, buffer, out_fd);
+            callEnsureSpace(2, buffer, out_fd, debug_out_fd);
 
             writeCSI(buffer);
             buffer.appendAssume('u');
@@ -352,11 +400,16 @@ struct EraseInstruction {
     }
 };
 
+#ifdef _DEBUG
 template<TypeArrayList<uint8_t> T>
-static void submitErase(const EraseInstruction instr, T& buffer, size_t out_fd) {
+static void submitErase(const EraseInstruction& instr, T& buffer, const size_t out_fd, const size_t debug_out_fd) {
+#else
+template<TypeArrayList<uint8_t> T>
+static void submitErase(const EraseInstruction& instr, T& buffer, const size_t out_fd) {
+#endif
     switch(instr.type) {
         case EraseInstrType::EraseChars: {
-            ensureSpace(3 + countDigits(instr.params.EraseChars), buffer, out_fd);
+            callEnsureSpace(3 + countDigits(instr.params.EraseChars), buffer, out_fd, debug_out_fd);
 
             writeCSI(buffer);
             writeParameter(instr.params.EraseChars, buffer);
@@ -365,20 +418,20 @@ static void submitErase(const EraseInstruction instr, T& buffer, size_t out_fd) 
         case EraseInstrType::EraseLine: {
             switch(instr.params.EraseLine) {
                 case EraseLine::Forwards: {
-                    ensureSpace(3, buffer, out_fd);
+                    callEnsureSpace(3, buffer, out_fd, debug_out_fd);
 
                     writeCSI(buffer);
                     buffer.appendAssume(EL);
                 } break;
                 case EraseLine::Backwards: {
-                    ensureSpace(4, buffer, out_fd);
+                    callEnsureSpace(4, buffer, out_fd, debug_out_fd);
 
                     writeCSI(buffer);
                     buffer.appendAssume('1');
                     buffer.appendAssume(EL);
                 } break;
                 case EraseLine::All: {
-                    ensureSpace(4, buffer, out_fd);
+                    callEnsureSpace(4, buffer, out_fd, debug_out_fd);
 
                     writeCSI(buffer);
                     buffer.appendAssume('2');
@@ -389,20 +442,20 @@ static void submitErase(const EraseInstruction instr, T& buffer, size_t out_fd) 
         case EraseInstrType::EraseDisplay: {
             switch(instr.params.EraseDisplay) {
                 case EraseDisplay::Forwards: {
-                    ensureSpace(3, buffer, out_fd);
+                    callEnsureSpace(3, buffer, out_fd, debug_out_fd);
 
                     writeCSI(buffer);
                     buffer.appendAssume(ED);
                 } break;
                 case EraseDisplay::Backwards: {
-                    ensureSpace(4, buffer, out_fd);
+                    callEnsureSpace(4, buffer, out_fd, debug_out_fd);
 
                     writeCSI(buffer);
                     buffer.appendAssume('1');
                     buffer.appendAssume(ED);
                 } break;
                 case EraseDisplay::All: {
-                    ensureSpace(4, buffer, out_fd);
+                    callEnsureSpace(4, buffer, out_fd, debug_out_fd);
 
                     writeCSI(buffer);
                     buffer.appendAssume('2');
@@ -411,14 +464,14 @@ static void submitErase(const EraseInstruction instr, T& buffer, size_t out_fd) 
             }
         } break;
         case EraseInstrType::DeleteChars: {
-            ensureSpace(3 + countDigits(instr.params.DeleteChars), buffer, out_fd);
+            callEnsureSpace(3 + countDigits(instr.params.DeleteChars), buffer, out_fd, debug_out_fd);
 
             writeCSI(buffer);
             writeParameter(instr.params.DeleteChars, buffer);
             buffer.appendAssume(DCH);
         } break;
         case EraseInstrType::DeleteLines: {
-            ensureSpace(3 + countDigits(instr.params.DeleteLines), buffer, out_fd);
+            callEnsureSpace(3 + countDigits(instr.params.DeleteLines), buffer, out_fd, debug_out_fd);
 
             writeCSI(buffer);
             writeParameter(instr.params.DeleteLines, buffer);
@@ -456,11 +509,16 @@ struct PaletteInstruction {
     }
 };
 
+#ifdef _DEBUG
 template<TypeArrayList<uint8_t> T>
-static void submitPalette(const PaletteInstruction instr, T& buffer, size_t out_fd) {
+static void submitPalette(const PaletteInstruction instr, T& buffer, const size_t out_fd, const size_t debug_out_fd) {
+#else
+template<TypeArrayList<uint8_t> T>
+static void submitPalette(const PaletteInstruction instr, T& buffer, const size_t out_fd) {
+#endif
     switch(instr.type) {
         case PaletteInstrType::SetPaletteColor: {
-            ensureSpace(9, buffer, out_fd);
+            callEnsureSpace(9, buffer, out_fd, debug_out_fd);
 
             buffer.appendAssume(OSC);
             buffer.appendAssume('P');
@@ -473,7 +531,7 @@ static void submitPalette(const PaletteInstruction instr, T& buffer, size_t out_
             buffer.len += sprintf(reinterpret_cast<char*>(buffer.ptr + buffer.len), "%x02\n", instr.params.SetPaletteColor.b);
         } break;
         case PaletteInstrType::ResetPalette: {
-            ensureSpace(2, buffer, out_fd);
+            callEnsureSpace(2, buffer, out_fd, debug_out_fd);
 
             buffer.appendAssume(OSC);
             buffer.appendAssume('R');
@@ -491,7 +549,7 @@ enum class InsertInstrType {
 
 struct InsertStringParams {
     uint8_t* str;
-    size_t lenght;
+    size_t len;
 };
 
 union InsertInstrParam {
@@ -527,37 +585,42 @@ struct InsertInstrucion {
     }
 };
 
+#ifdef _DEBUG
 template<TypeArrayList<uint8_t> T>
-static void submitInsert(const InsertInstrucion instr, T& buffer, size_t out_fd) {
+static void submitInsert(const InsertInstrucion instr, T& buffer, const size_t out_fd, const size_t debug_out_fd) {
+#else 
+template<TypeArrayList<uint8_t> T>
+static void submitInsert(const InsertInstrucion instr, T& buffer, const size_t out_fd) {
+#endif
     switch(instr.type) {
         case InsertInstrType::InsertChars: {
-            ensureSpace(1, buffer, out_fd);
+            callEnsureSpace(1, buffer, out_fd, debug_out_fd);
 
             buffer.appendAssume(instr.params.InsertChars);
         } break;
         case InsertInstrType::InsertString: {
-            ensureSpace(instr.params.InsertString.lenght, buffer, out_fd);
+            callEnsureSpace(instr.params.InsertString.len, buffer, out_fd, debug_out_fd);
 
-            buffer.appendArrayAssume(instr.params.InsertString.str, instr.params.InsertString.lenght);
+            buffer.appendArrayAssume(instr.params.InsertString.str, instr.params.InsertString.len);
 
             free(instr.params.InsertString.str);
         } break;
         case InsertInstrType::BlankChars: {
-            ensureSpace(3 + countDigits(instr.params.BlankChars), buffer, out_fd);
+            callEnsureSpace(3 + countDigits(instr.params.BlankChars), buffer, out_fd, debug_out_fd);
 
             writeCSI(buffer);
             writeParameter(instr.params.BlankChars, buffer);
             buffer.appendAssume(ICH);
         } break;
         case InsertInstrType::BlankLines: {
-            ensureSpace(3 + countDigits(instr.params.BlankChars), buffer, out_fd);
+            callEnsureSpace(3 + countDigits(instr.params.BlankChars), buffer, out_fd, debug_out_fd);
 
             writeCSI(buffer);
             writeParameter(instr.params.BlankChars, buffer);
             buffer.appendAssume(IL);
         } break;
         case InsertInstrType::RepeatChar: {
-            ensureSpace(3 + countDigits(instr.params.BlankChars), buffer, out_fd);
+            callEnsureSpace(3 + countDigits(instr.params.BlankChars), buffer, out_fd, debug_out_fd);
 
             writeCSI(buffer);
             writeParameter(instr.params.BlankChars, buffer);
@@ -639,11 +702,16 @@ struct StyleInstruction {
     }
 };
 
+#ifdef _DEBUG
 template<TypeArrayList<uint8_t> T>
-static inline void submitStyle(const StyleInstruction instr, T& buffer, size_t out_fd) {
+static inline void submitStyle(const StyleInstruction instr, T& buffer, const size_t out_fd, const size_t debug_out_fd) {
+#else
+template<TypeArrayList<uint8_t> T>
+static inline void submitStyle(const StyleInstruction instr, T& buffer, const size_t out_fd) {
+#endif
     switch(instr.type) {
         case StyleInstrType::ForegroundColor: {
-            ensureSpace(4, buffer, out_fd);
+            callEnsureSpace(4, buffer, out_fd, debug_out_fd);
 
             assert(instr.params.ForegroundColor <= 15);
 
@@ -664,7 +732,7 @@ static inline void submitStyle(const StyleInstruction instr, T& buffer, size_t o
             const size_t g_digits = countDigits(instr.params.ForegroundFullColor.g);
             const size_t b_digits = countDigits(instr.params.ForegroundFullColor.b);
 
-            ensureSpace(7 + r_digits + g_digits + b_digits, buffer, out_fd);
+            callEnsureSpace(7 + r_digits + g_digits + b_digits, buffer, out_fd, debug_out_fd);
 
             writeCSI(buffer);
             buffer.appendAssume('3');
@@ -683,14 +751,14 @@ static inline void submitStyle(const StyleInstruction instr, T& buffer, size_t o
             assert(instr.params.ForegroundColor <= 15);
 
             if(instr.params.ForegroundColor < 7) {
-                ensureSpace(4, buffer, out_fd);
+                callEnsureSpace(4, buffer, out_fd, debug_out_fd);
 
                 writeCSI(buffer);
                 buffer.appendAssume('4');
                 writeParameter(instr.params.ForegroundColor, buffer);
                 buffer.appendAssume(SGR);
             } else {
-                ensureSpace(5, buffer, out_fd);
+                callEnsureSpace(5, buffer, out_fd, debug_out_fd);
 
                 writeCSI(buffer);
                 buffer.appendAssume('1');
@@ -704,7 +772,7 @@ static inline void submitStyle(const StyleInstruction instr, T& buffer, size_t o
             const size_t g_digits = countDigits(instr.params.BackgroundFullColor.g);
             const size_t b_digits = countDigits(instr.params.BackgroundFullColor.b);
 
-            ensureSpace(7 + r_digits + g_digits + b_digits, buffer, out_fd);
+            callEnsureSpace(7 + r_digits + g_digits + b_digits, buffer, out_fd, debug_out_fd);
 
             writeCSI(buffer);
             buffer.appendAssume('4');
@@ -721,13 +789,13 @@ static inline void submitStyle(const StyleInstruction instr, T& buffer, size_t o
         } break;
         case StyleInstrType::Bold: {
             if(instr.params.Bold) {
-                ensureSpace(4, buffer, out_fd);
+                callEnsureSpace(4, buffer, out_fd, debug_out_fd);
 
                 writeCSI(buffer);
                 buffer.appendAssume('1');
                 buffer.appendAssume(SGR);
             } else {
-                ensureSpace(5, buffer, out_fd);
+                callEnsureSpace(5, buffer, out_fd, debug_out_fd);
 
                 writeCSI(buffer);
                 buffer.appendAssume('2');
@@ -737,13 +805,13 @@ static inline void submitStyle(const StyleInstruction instr, T& buffer, size_t o
         } break;
         case StyleInstrType::Italic: {
             if(instr.params.Italic) {
-                ensureSpace(4, buffer, out_fd);
+                callEnsureSpace(4, buffer, out_fd, debug_out_fd);
 
                 writeCSI(buffer);
                 buffer.appendAssume('3');
                 buffer.appendAssume(SGR);
             } else {
-                ensureSpace(5, buffer, out_fd);
+                callEnsureSpace(5, buffer, out_fd, debug_out_fd);
 
                 writeCSI(buffer);
                 buffer.appendAssume('2');
@@ -753,13 +821,13 @@ static inline void submitStyle(const StyleInstruction instr, T& buffer, size_t o
         } break;
         case StyleInstrType::Underlined: {
             if(instr.params.Underlined) {
-                ensureSpace(4, buffer, out_fd);
+                callEnsureSpace(4, buffer, out_fd, debug_out_fd);
 
                 writeCSI(buffer);
                 buffer.appendAssume('4');
                 buffer.appendAssume(SGR);
             } else {
-                ensureSpace(5, buffer, out_fd);
+                callEnsureSpace(5, buffer, out_fd, debug_out_fd);
 
                 writeCSI(buffer);
                 buffer.appendAssume('2');
@@ -768,12 +836,12 @@ static inline void submitStyle(const StyleInstruction instr, T& buffer, size_t o
             }
         } break;
         case StyleInstrType::SaveStyle: {
-            ensureSpace(2, buffer, out_fd);
+            callEnsureSpace(2, buffer, out_fd, debug_out_fd);
             buffer.appendAssume(ESC);
             buffer.appendAssume(DECSC);
         } break;
         case StyleInstrType::RestoreStyle: {
-            ensureSpace(2, buffer, out_fd);
+            callEnsureSpace(2, buffer, out_fd, debug_out_fd);
             buffer.appendAssume(ESC);
             buffer.appendAssume(DECRC);
         } break;
@@ -840,19 +908,24 @@ struct Instruction {
 /**
  * @brief generates escape sequence and writes it to stdout_fd
  **/
+#ifdef _DEBUG
 template<TypeArrayList<Instruction> I, TypeArrayList<uint8_t> B>
-static void submit(const I& instructions, B& buffer, size_t out_fd = STDOUT_FILENO) {
+static void submit(const I& instructions, B& buffer, const size_t out_fd, const size_t debug_out_fd) {
+#else
+template<TypeArrayList<Instruction> I, TypeArrayList<uint8_t> B>
+static void submit(const I& instructions, B& buffer, const size_t out_fd) {
+#endif
     for(size_t i = 0; i < instructions.len; i++) {
         const Instruction instr = instructions.ptr[i];
 
         switch(instr.type) {
             case InstrType::Reset: {
-                ensureSpace(1, buffer, out_fd);
+                callEnsureSpace(1, buffer, out_fd, debug_out_fd);
 
                 buffer.appendAssume(RIS);
             } break;
             case InstrType::Tabstop: {
-                ensureSpace(1, buffer, out_fd);
+                callEnsureSpace(1, buffer, out_fd, debug_out_fd);
 
                 buffer.appendAssume(HTS);
             } break;
@@ -860,7 +933,7 @@ static void submit(const I& instructions, B& buffer, size_t out_fd = STDOUT_FILE
                 const size_t top_digits = countDigits(instr.params.SetScrollingRegion.top);
                 const size_t bottom_digits = countDigits(instr.params.SetScrollingRegion.bottom);
 
-                ensureSpace(4 + top_digits + bottom_digits, buffer, out_fd);
+                callEnsureSpace(4 + top_digits + bottom_digits, buffer, out_fd, debug_out_fd);
 
                 writeCSI(buffer);
                 writeParameter(instr.params.SetScrollingRegion.top, buffer);
@@ -869,38 +942,38 @@ static void submit(const I& instructions, B& buffer, size_t out_fd = STDOUT_FILE
                 buffer.appendAssume(DECSTBM);
             } break;
             case InstrType::ISOCharacterSet: {
-                ensureSpace(3, buffer, out_fd);
+                callEnsureSpace(3, buffer, out_fd, debug_out_fd);
 
                 buffer.appendAssume(ESC);
                 buffer.appendAssume('%');
                 buffer.appendAssume('@');
             } break;
             case InstrType::UTF8CharacterSet: {
-                ensureSpace(3, buffer, out_fd);
+                callEnsureSpace(3, buffer, out_fd, debug_out_fd);
 
                 buffer.appendAssume(ESC);
                 buffer.appendAssume('%');
                 buffer.appendAssume('G');
             } break;
             case InstrType::Cursor: {
-                submitCursor(instr.params.Cursor, buffer, out_fd);
+                callSubmitCursor(instr.params.Cursor, buffer, out_fd, debug_out_fd);
             } break;
             case InstrType::Insert: {
-                submitInsert(instr.params.Insert, buffer, out_fd);
+                callSubmitInsert(instr.params.Insert, buffer, out_fd, debug_out_fd);
             } break;
             case InstrType::Erase: {
-                submitErase(instr.params.Erase, buffer, out_fd);
+                callSubmitErase(instr.params.Erase, buffer, out_fd, debug_out_fd);
             } break;
             case InstrType::Palette: {
-                submitPalette(instr.params.Palette, buffer, out_fd);
+                callSubmitPalette(instr.params.Palette, buffer, out_fd, debug_out_fd);
             } break;
             case InstrType::Style: {
-                submitStyle(instr.params.Style, buffer, out_fd);
+                callSubmitStyle(instr.params.Style, buffer, out_fd, debug_out_fd);
             } break;
         }
     }
 
-    flushBuffer(buffer, out_fd);
+    callFlushBuffer(buffer, out_fd, debug_out_fd);
 }
 
 } // namespace ControlSeq

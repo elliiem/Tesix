@@ -8,7 +8,6 @@
 #include <cstdlib>
 #include <strings.h>
 
-
 namespace Tesix {
 
 template<typename T>
@@ -212,23 +211,15 @@ static bool isLoopingNodePath(Node<T>* front) {
 }
 
 template<typename T>
-struct NodeIterator {
-    Node<T>* cur;
-
-    Node<T>* next() {
-        cur = cur->next;
-
-        return cur;
-    }
-};
-
-template<typename T>
 struct LinkedList {
     Node<T>* front = nullptr;
     Node<T>* back = nullptr;
     size_t len = 0;
 
     LinkedList() = default;
+    ~LinkedList() {
+        freeNodes(front);
+    }
 
     void init() {
         assert(!isInited());
@@ -295,6 +286,25 @@ struct LinkedList {
         connectNodes(item, node->next);
         connectNodes(node, item);
 
+        len += 1;
+
+        assert(!isLoopingNodePath(front));
+    }
+
+    void insertAtNode(const T& value, Node<T>* node) {
+        assert(node != nullptr);
+        assert(node->next != nullptr);
+
+        Node<T>* next = node->next;
+
+        Node<T>* item = allocNode<T>();
+        item->value = value;
+
+        connectNodes(node, item);
+        connectNodes(item, next);
+
+        len += 1;
+
         assert(!isLoopingNodePath(front));
     }
 
@@ -317,6 +327,24 @@ struct LinkedList {
         len += item_count;
 
         assert(!isLoopingNodePath(front));
+    }
+
+    void emplaceNodesAtNode(Node<T>* items_front, Node<T>* node) {
+        assert(items_front != nullptr);
+        assert(node != nullptr);
+        assert(node->prev != nullptr);
+        assert(node->next != nullptr);
+
+        auto back_and_len = getPathBackAndLen(items_front);
+        Node<T>* items_back = back_and_len.first;
+        const size_t item_c = back_and_len.second;
+
+        connectNodes(node->prev, items_front);
+        connectNodes(items_back, node->next);
+
+        free(node);
+
+        len += item_c - 1;
     }
 
     void pop(const size_t index) {
@@ -385,6 +413,17 @@ struct LinkedList {
         assert(!isLoopingNodePath(front));
     }
 
+    void eraseNode(Node<T>* node) {
+        assert(node != nullptr);
+        assert(node->prev != nullptr && node->next != nullptr);
+
+        connectNodes(node->prev, node->next);
+
+        len -= 1;
+
+        free(node);
+    }
+
     void move(const size_t from, const size_t n, const size_t to) {
         assert(len >= to);
         assert(len >= from + n);
@@ -422,7 +461,18 @@ struct LinkedList {
         assert(isInited());
         assert(!isEmpty());
 
-        return back->next;
+        return back->prev;
+    }
+
+    Node<T>* take() {
+        Node<T>* items_front = first();
+
+        disconnectNodePrev(items_front);
+        disconnectNodeNext(last());
+
+        connectNodes(front, back);
+
+        return items_front;
     }
 };
 
