@@ -34,6 +34,10 @@ struct Box {
     size_t _width;
     size_t _height;
 
+    inline bool takesUpSpace() const {
+        return _width > 0 && _height > 0;
+    }
+
     inline size_t right() const {
         return _pos._x + _width;
     }
@@ -68,6 +72,10 @@ struct Box {
 struct TermBox {
     size_t _width;
     size_t _height;
+
+    inline bool takesUpSpace() const {
+        return _width > 0 && _height > 0;
+    }
 
     inline Position topLeft() {
         assert(_width > 0);

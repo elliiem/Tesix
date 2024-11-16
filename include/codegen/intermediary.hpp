@@ -20,6 +20,9 @@ enum class InstrType {
     InsertChar,
     InsertString,
     Repeat,
+    FillArea,
+    DrawBuffer,
+    MoveArea,
     Erase,
     Clear,
     ClearFw,
@@ -27,13 +30,8 @@ enum class InstrType {
     ClearLine,
     ClearLineFw,
     ClearLineBw,
-
-    ChangeStyle,
-
-    FillArea,
     ClearArea,
-    MoveArea,
-    DrawBuffer,
+    ChangeStyle,
 };
 
 struct InsertCharParams {
@@ -57,6 +55,10 @@ struct MoveAreaParams {
     Box _area;
 };
 
+struct ClearAreaParams {
+    Box _area;
+};
+
 struct RepeatParams {
     Position _pos;
     uint32_t _ch;
@@ -68,7 +70,7 @@ union InstrParam {
     InsertStringParams InsertString;
     FillAreaParams FillArea;
     MoveAreaParams MoveArea;
-    Box ClearArea;
+    ClearAreaParams ClearArea;
     RepeatParams Repeat;
 };
 
@@ -88,8 +90,8 @@ struct Instruction {
         return {._type = InstrType::Repeat, ._params = {.Repeat = params}};
     }
 
-    static inline Instruction createClearArea(const Box& area) {
-        return {._type = InstrType::ClearArea, ._params = {.ClearArea = area}};
+    static inline Instruction createClearArea(const ClearAreaParams& params) {
+        return {._type = InstrType::ClearArea, ._params = {.ClearArea = params}};
     }
 
     static inline Instruction createFillArea(const FillAreaParams& params) {
@@ -146,14 +148,16 @@ static Node<Instruction>* expand(Node<Instruction>* instr, LinkedList<Instructio
         case InstrType::ClearArea: {
             const auto& params = instr->value._params.ClearArea;
 
+            assert(params._area.takesUpSpace());
+
             LinkedList<Instruction> nodes;
             nodes.init();
 
-            for(size_t line = params._pos._y; line < params.bottom(); line++) {
+            for(size_t line = params._area._pos._y; line < params._area.bottom(); line++) {
                 nodes.append(Instruction::createRepeat({
-                    ._pos = {params._pos._x, line},
+                    ._pos = {params._area._pos._x, line},
                     ._ch = ' ',
-                    ._n = params._width,
+                    ._n = params._area._width,
                 }));
             }
 
@@ -165,6 +169,8 @@ static Node<Instruction>* expand(Node<Instruction>* instr, LinkedList<Instructio
         } break;
         case InstrType::FillArea: {
             const auto& params = instr->value._params.FillArea;
+
+            assert(params._area.takesUpSpace());
 
             InstrList nodes;
             nodes.init();
