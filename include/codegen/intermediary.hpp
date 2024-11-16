@@ -22,8 +22,11 @@ enum class InstrType {
     Repeat,
     Erase,
     Clear,
-    ClearForwards,
-    ClearBackwards,
+    ClearFw,
+    ClearBw,
+    ClearLine,
+    ClearLineFw,
+    ClearLineBw,
 
     ChangeStyle,
 
@@ -102,7 +105,7 @@ struct State {
     uint64_t _style;
     uint32_t _last_ch;
     Buffer2D<uint32_t>& _screen_buffer;
-    Box _term_area;
+    TermBox _term_area;
 };
 
 static void submitSetCursor(Position pos, ArrayList<ControlSeq::Instruction, Dynamic>& esc, State& state) {

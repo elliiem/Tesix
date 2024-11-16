@@ -1,4 +1,4 @@
-#define _DEBUG
+#define _DEBUG 1
 
 #include "../include/codegen/intermediary.hpp"
 
@@ -35,7 +35,6 @@ int main() {
         ._screen_buffer = screen_buffer,
         ._term_area =
             {
-                ._pos = {._x = 0, ._y = 0},
                 ._width = 128,
                 ._height = 90,
             },
