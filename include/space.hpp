@@ -6,17 +6,17 @@
 
 namespace Tesix {
 
+struct FloatingBox;
 struct Box;
-struct TermBox;
 
 template<typename T>
 static constexpr bool is_box_v = false;
 
 template<>
-static constexpr bool is_box_v<Box> = true;
+static constexpr bool is_box_v<FloatingBox> = true;
 
 template<>
-static constexpr bool is_box_v<TermBox> = true;
+static constexpr bool is_box_v<Box> = true;
 
 template<typename T>
 concept AnyBox = is_box_v<T>;
@@ -30,52 +30,8 @@ struct Position {
 };
 
 struct Box {
-    Position _pos;
     size_t _width;
     size_t _height;
-
-    inline bool takesUpSpace() const {
-        return _width > 0 && _height > 0;
-    }
-
-    inline size_t right() const {
-        return _pos._x + _width;
-    }
-
-    inline size_t bottom() const {
-        return _pos._y + _height;
-    }
-
-    inline Position topLeft() const {
-        return {_pos._x, _pos._y};
-    }
-
-    inline Position bottomLeft() const {
-        return {_pos._x, _pos._y + _height};
-    }
-
-    inline Position topRight() const {
-        return {_pos._x + _width, _pos._y};
-    }
-
-    inline Position bottomRight() const {
-        return {_pos._x + _width, _pos._y + _height};
-    }
-
-    template<AnyBox T>
-    inline bool contains(const T& child) const;
-
-    template<>
-    inline bool contains(const Box& child) const;
-};
-
-struct TermBox {
-    size_t _width;
-    size_t _height;
-
-    inline bool takesUpSpace() const {
-        return _width > 0 && _height > 0;
-    }
 
     inline Position topLeft() {
         assert(_width > 0);
@@ -109,39 +65,92 @@ struct TermBox {
     inline bool contains(const T& child) const;
 
     template<>
-    inline bool contains(const Box& child) const;
+    inline bool contains(const FloatingBox& child) const;
 
     template<>
-    inline bool contains(const TermBox& child) const;
+    inline bool contains(const Box& child) const;
+
+    inline size_t size() {
+        return _width * _height;
+    }
+
+    inline bool takesUpSpace() const {
+        return _width > 0 && _height > 0;
+    }
+
+};
+
+struct FloatingBox {
+    Position _pos;
+    Box _box;
+
+    inline size_t right() const {
+        return _pos._x + _box._width;
+    }
+
+    inline size_t bottom() const {
+        return _pos._y + _box._height;
+    }
+
+    inline Position topLeft() const {
+        return {_pos._x, _pos._y};
+    }
+
+    inline Position bottomLeft() const {
+        return {_pos._x, _pos._y + _box._height};
+    }
+
+    inline Position topRight() const {
+        return {_pos._x + _box._width, _pos._y};
+    }
+
+    inline Position bottomRight() const {
+        return {_pos._x + _box._width, _pos._y + _box._height};
+    }
+
+    template<AnyBox T>
+    inline bool contains(const T& child) const;
+
+    template<>
+    inline bool contains(const FloatingBox& child) const;
+
+    inline size_t size() {
+        return _box.size();
+    }
+
+    inline bool takesUpSpace() const {
+        return _box._width > 0 && _box._height > 0;
+    }
+
 };
 
 template<>
-inline bool Position::isInside(const Box& area) const {
+inline bool Position::isInside(const FloatingBox& area) const {
     return (_x >= area._pos._x && _x <= area.right()) && (_y >= area._pos._y && _y <= area.bottom());
 }
 
 template<>
-inline bool Position::isInside(const TermBox& area) const {
+inline bool Position::isInside(const Box& area) const {
     return _x < area._width && _y < area._height;
 }
 
 template<>
-inline bool Box::contains(const Box& child) const {
+inline bool FloatingBox::contains(const FloatingBox& child) const {
     return (child._pos._x >= _pos._x && child.right() <= right()) && (child._pos._y >= _pos._y && child.bottom() <= bottom());
 }
 
 template<>
-inline bool Box::contains(const TermBox& child) const {
+inline bool FloatingBox::contains(const Box& child) const {
     return (_pos._x == 0 && child._width <= right()) && (_pos._y == 0 && child._height <= bottom());
 }
 
 template<>
-inline bool TermBox::contains(const Box& child) const {
+inline bool Box::contains(const FloatingBox& child) const {
     return child.right() < _width && child.bottom() < _height;
 }
 
 template<>
-inline bool TermBox::contains(const TermBox& child) const {
+inline bool Box::contains(const Box& child) const {
     return child._width < _width && child._height < _height;
 }
 

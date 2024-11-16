@@ -46,17 +46,17 @@ struct InsertStringParams {
 };
 
 struct FillAreaParams {
-    Box _area;
+    FloatingBox _area;
     uint32_t _ch;
 };
 
 struct MoveAreaParams {
     Position _pos;
-    Box _area;
+    FloatingBox _area;
 };
 
 struct ClearAreaParams {
-    Box _area;
+    FloatingBox _area;
 };
 
 struct RepeatParams {
@@ -107,7 +107,7 @@ struct State {
     uint64_t _style;
     uint32_t _last_ch;
     Buffer2D<uint32_t>& _screen_buffer;
-    TermBox _term_area;
+    Box _term_area;
 };
 
 static void submitSetCursor(Position pos, ArrayList<ControlSeq::Instruction, Dynamic>& esc, State& state) {
@@ -143,10 +143,12 @@ static void submitSetCursor(Position pos, ArrayList<ControlSeq::Instruction, Dyn
     state._pos = pos;
 }
 
-static Node<Instruction>* expand(Node<Instruction>* instr, LinkedList<Instruction>& intermediate) {
-    switch(instr->value._type) {
+static Node<Instruction>* expand(Node<Instruction>* instr_node, LinkedList<Instruction>& intermediate) {
+    const auto& instr = instr_node->value;
+
+    switch(instr._type) {
         case InstrType::ClearArea: {
-            const auto& params = instr->value._params.ClearArea;
+            const auto& params = instr._params.ClearArea;
 
             assert(params._area.takesUpSpace());
 
@@ -157,18 +159,18 @@ static Node<Instruction>* expand(Node<Instruction>* instr, LinkedList<Instructio
                 nodes.append(Instruction::createRepeat({
                     ._pos = {params._area._pos._x, line},
                     ._ch = ' ',
-                    ._n = params._area._width,
+                    ._n = params._area._box._width,
                 }));
             }
 
             auto items = nodes.take();
 
-            intermediate.emplaceNodesAtNode(items, instr);
+            intermediate.emplaceNodesAtNode(items, instr_node);
 
             return items;
         } break;
         case InstrType::FillArea: {
-            const auto& params = instr->value._params.FillArea;
+            const auto& params = instr._params.FillArea;
 
             assert(params._area.takesUpSpace());
 
@@ -179,17 +181,22 @@ static Node<Instruction>* expand(Node<Instruction>* instr, LinkedList<Instructio
                 nodes.append(Instruction::createRepeat({
                     ._pos = {params._area._pos._x, line},
                     ._ch = params._ch,
-                    ._n = params._area._width,
+                    ._n = params._area._box._width,
                 }));
             }
 
             auto items = nodes.take();
 
-            intermediate.emplaceNodesAtNode(items, instr);
+            intermediate.emplaceNodesAtNode(items, instr_node);
 
             return items;
         } break;
         case InstrType::MoveArea: {
+            const auto& params = instr._params.MoveArea;
+
+            
+
+
         } break;
     }
 }

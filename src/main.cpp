@@ -22,7 +22,7 @@ int main() {
     esc.append(Tesix::ControlSeq::Instruction::createErase(Tesix::ControlSeq::EraseInstruction::createEraseDisplay(Tesix::ControlSeq::EraseDisplay::All)));
     esc.append(Tesix::ControlSeq::Instruction::createCursor(Tesix::ControlSeq::CursorInstruction::createCursorTo( {.row = 1, .column = 1})));
 
-    Buffer2D<uint32_t> screen_buffer;
+    Tesix::Buffer2D<uint32_t> screen_buffer;
 
     Tesix::Intermediary::State state = {
         ._pos =
@@ -43,7 +43,7 @@ int main() {
     Tesix::LinkedList<Tesix::Intermediary::Instruction> intermediary;
     intermediary.init();
 
-    intermediary.append(Tesix::Intermediary::Instruction::createFillArea({._area = {._pos = {._x = 5, ._y = 5}, ._width = 8, ._height = 4}, ._ch = 'x'}));
+    intermediary.append(Tesix::Intermediary::Instruction::createFillArea({._area = {._pos = {._x = 5, ._y = 5}, ._box = {._width = 8, ._height = 4}}, ._ch = 'x'}));
 
     Tesix::Intermediary::submit(intermediary, esc, state);
 
