@@ -193,7 +193,7 @@ template<typename T>
 static bool isLoopingNodePath(Node<T>* front) {
     Node<T>* cur = front;
 
-    ArrayList<Node<T>*, Dynamic> known(7);
+    ArrayList<Node<T>*, Dynamic> known(5);
 
     while(cur->next != nullptr) {
         for(size_t i = 0; i < known.len; i++) {
@@ -264,7 +264,7 @@ struct LinkedList {
 
         Node<T>* new_node = allocNode<T>();
 
-        new_node->value = std::move(value);
+        new_node->value = value;
 
         connectNodes(back->prev, new_node);
         connectNodes(new_node, back);

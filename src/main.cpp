@@ -15,12 +15,28 @@ void enableRawMode() {
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
+void contains() {
+    const Tesix::FloatingBox area = {
+        ._pos = {._x = 10, ._y = 10},
+        ._box = {._width = 5, ._height = 5},
+    };
+
+    const Tesix::FloatingBox sub = {
+        ._pos = {._x = 11, ._y = 11},
+        ._box = {._width = 3, ._height = 3},
+    };
+}
+
 int main() {
+    /*contains();*/
+    /*return 0;*/
+
     enableRawMode();
 
     ArrayList<Tesix::ControlSeq::Instruction, Dynamic> esc(5);
-    esc.append(Tesix::ControlSeq::Instruction::createErase(Tesix::ControlSeq::EraseInstruction::createEraseDisplay(Tesix::ControlSeq::EraseDisplay::All)));
-    esc.append(Tesix::ControlSeq::Instruction::createCursor(Tesix::ControlSeq::CursorInstruction::createCursorTo( {.row = 1, .column = 1})));
+    esc.append(
+        Tesix::ControlSeq::Instruction::createErase(Tesix::ControlSeq::EraseInstruction::createEraseDisplay(Tesix::ControlSeq::EraseDisplay::All)));
+    esc.append(Tesix::ControlSeq::Instruction::createCursor(Tesix::ControlSeq::CursorInstruction::createCursorTo({.row = 1, .column = 1})));
 
     Tesix::Buffer2D<uint32_t> screen_buffer;
 
@@ -43,11 +59,28 @@ int main() {
     Tesix::LinkedList<Tesix::Intermediary::Instruction> intermediary;
     intermediary.init();
 
-    intermediary.append(Tesix::Intermediary::Instruction::createFillArea({._area = {._pos = {._x = 5, ._y = 5}, ._box = {._width = 8, ._height = 4}}, ._ch = 'x'}));
+    Tesix::Buffer2D<uint32_t> contents(5, 5);
+
+    intermediary.append(Tesix::Intermediary::Instruction::createMoveArea({
+        ._from =
+            {
+                ._x = 5,
+                ._y = 6,
+            },
+        ._to =
+            {
+                ._x = 5,
+                ._y = 5,
+            },
+        ._contents = contents.subBuffer({
+            ._pos = {._x = 0, ._y = 0},
+            ._box = {._width = 5, ._height = 5},
+        }),
+    }));
 
     Tesix::Intermediary::submit(intermediary, esc, state);
 
-    esc.append(Tesix::ControlSeq::Instruction::createCursor(Tesix::ControlSeq::CursorInstruction::createCursorTo( {.row = 1, .column = 90})));
+    esc.append(Tesix::ControlSeq::Instruction::createCursor(Tesix::ControlSeq::CursorInstruction::createCursorTo({.row = 1, .column = 90})));
 
     ArrayList<uint8_t, Dynamic> out(10);
 

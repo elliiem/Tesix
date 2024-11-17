@@ -27,6 +27,10 @@ struct Position {
 
     template<AnyBox T>
     inline bool isInside(const T& area) const;
+
+    inline Position operator+(const Position& other) const {
+        return {._x = _x + other._x, ._y = _y + other._y};
+    }
 };
 
 struct Box {
@@ -77,7 +81,6 @@ struct Box {
     inline bool takesUpSpace() const {
         return _width > 0 && _height > 0;
     }
-
 };
 
 struct FloatingBox {
@@ -85,11 +88,11 @@ struct FloatingBox {
     Box _box;
 
     inline size_t right() const {
-        return _pos._x + _box._width;
+        return _pos._x + _box._width - 1;
     }
 
     inline size_t bottom() const {
-        return _pos._y + _box._height;
+        return _pos._y + _box._height - 1;
     }
 
     inline Position topLeft() const {
@@ -97,15 +100,15 @@ struct FloatingBox {
     }
 
     inline Position bottomLeft() const {
-        return {_pos._x, _pos._y + _box._height};
+        return {_pos._x, _pos._y + _box._height - 1};
     }
 
     inline Position topRight() const {
-        return {_pos._x + _box._width, _pos._y};
+        return {_pos._x + _box._width - 1, _pos._y};
     }
 
     inline Position bottomRight() const {
-        return {_pos._x + _box._width, _pos._y + _box._height};
+        return {._x = _pos._x + _box._width - 1,._y = _pos._y + _box._height - 1};
     }
 
     template<AnyBox T>
@@ -121,7 +124,6 @@ struct FloatingBox {
     inline bool takesUpSpace() const {
         return _box._width > 0 && _box._height > 0;
     }
-
 };
 
 template<>
@@ -151,7 +153,7 @@ inline bool Box::contains(const FloatingBox& child) const {
 
 template<>
 inline bool Box::contains(const Box& child) const {
-    return child._width < _width && child._height < _height;
+    return child._width <= _width && child._height <= _height;
 }
 
 template<AnyBox A, AnyBox B>

@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <execution>
 
 namespace Tesix {
 
@@ -51,8 +52,9 @@ struct FillAreaParams {
 };
 
 struct MoveAreaParams {
-    Position _pos;
-    FloatingBox _area;
+    Position _from;
+    Position _to;
+    SubBuffer2D<uint32_t> _contents;
 };
 
 struct ClearAreaParams {
@@ -65,6 +67,11 @@ struct RepeatParams {
     size_t _n;
 };
 
+struct DrawBufferParams {
+    Position _pos;
+    SubBuffer2D<uint32_t> _contents;
+};
+
 union InstrParam {
     InsertCharParams InsertChar;
     InsertStringParams InsertString;
@@ -72,6 +79,7 @@ union InstrParam {
     MoveAreaParams MoveArea;
     ClearAreaParams ClearArea;
     RepeatParams Repeat;
+    DrawBufferParams DrawBuffer;
 };
 
 struct Instruction {
@@ -96,6 +104,14 @@ struct Instruction {
 
     static inline Instruction createFillArea(const FillAreaParams& params) {
         return {._type = InstrType::FillArea, ._params = {.FillArea = params}};
+    }
+
+    static inline Instruction createDrawBuffer(const DrawBufferParams& params) {
+        return {._type = InstrType::DrawBuffer, ._params = {.DrawBuffer = params}};
+    }
+
+    static inline Instruction createMoveArea(const MoveAreaParams& params) {
+        return {._type = InstrType::MoveArea, ._params = {.MoveArea = params}};
     }
 };
 
@@ -177,7 +193,7 @@ static Node<Instruction>* expand(Node<Instruction>* instr_node, LinkedList<Instr
             InstrList nodes;
             nodes.init();
 
-            for(size_t line = params._area._pos._y; line < params._area.bottom(); line++) {
+            for(size_t line = params._area._pos._y; line <= params._area.bottom(); line++) {
                 nodes.append(Instruction::createRepeat({
                     ._pos = {params._area._pos._x, line},
                     ._ch = params._ch,
@@ -193,10 +209,259 @@ static Node<Instruction>* expand(Node<Instruction>* instr_node, LinkedList<Instr
         } break;
         case InstrType::MoveArea: {
             const auto& params = instr._params.MoveArea;
+            InstrList nodes;
+            nodes.init();
 
-            
+            const FloatingBox to_area = {._pos = params._to, ._box = params._contents._area._box};
+            const FloatingBox from_area = {._pos = params._from, ._box = params._contents._area._box};
 
+            //  TODO: draw buffer not just fill
+            nodes.append(Instruction::createFillArea({
+                ._area = to_area,
+                ._ch = '#',
+            }));
 
+            if(to_area.contains(from_area)) {
+                goto ret;
+            }
+
+            if(from_area.topLeft().isInside(to_area) && !from_area.bottomRight().isInside(to_area)) {
+                const size_t from_right_abs = params._from._x + params._contents._area._box._width - 1;
+                const size_t to_right_abs = params._to._x + params._contents._area._box._width - 1;
+                const size_t from_bottom_abs = params._from._y + params._contents._area._box._height - 1;
+                const size_t to_bottom_abs = params._to._y + params._contents._area._box._height - 1;
+
+                if(!from_area.topRight().isInside(to_area) && !from_area.bottomLeft().isInside(to_area)) {
+                    const FloatingBox right_area = {
+                        ._pos =
+                            {
+                                ._x = to_right_abs + 1,
+                                ._y = params._from._y,
+                            },
+                        ._box =
+                            {
+                                ._width = from_right_abs - to_right_abs,
+                                ._height = params._contents._area._box._height,
+                            },
+                    };
+
+                    nodes.append(Instruction::createFillArea({
+                        ._area = right_area,
+                        ._ch = 'x',
+                    }));
+
+                    const FloatingBox bottom_area = {
+                        ._pos =
+                            {
+                                ._x = params._from._x,
+                                ._y = to_bottom_abs + 1,
+                            },
+                        ._box =
+                            {
+                                ._width = to_right_abs - params._from._x + 1,
+                                ._height = from_bottom_abs - to_bottom_abs,
+                            },
+
+                    };
+
+                    nodes.append(Instruction::createFillArea({
+                        ._area = bottom_area,
+                        ._ch = 'x',
+                    }));
+                } else if(from_area.topRight().isInside(to_area)) {
+                    const FloatingBox bottom_area = {
+                        ._pos =
+                            {
+                                ._x = params._from._x,
+                                ._y = to_bottom_abs + 1,
+                            },
+                        ._box =
+                            {
+                                ._width = params._contents._area._box._width,
+                                ._height = from_bottom_abs - to_bottom_abs,
+                            },
+                    };
+
+                    nodes.append(Instruction::createFillArea({
+                        ._area = bottom_area,
+                        ._ch = 'x',
+                    }));
+                } else {
+                    const FloatingBox right_area = {
+                        ._pos =
+                            {
+                                ._x = to_right_abs + 1,
+                                ._y = params._from._y,
+                            },
+                        ._box =
+                            {
+                                ._width = from_right_abs - to_right_abs,
+                                ._height = params._contents._area._box._height,
+                            },
+                    };
+
+                    nodes.append(Instruction::createFillArea({
+                        ._area = right_area,
+                        ._ch = 'x',
+                    }));
+                }
+            } else if(from_area.bottomLeft().isInside(to_area)) {
+                const size_t from_right_abs = params._from._x + params._contents._area._box._width - 1;
+                const size_t to_right_abs = params._to._x + params._contents._area._box._width - 1;
+
+                if(!from_area.bottomRight().isInside(to_area)) {
+                    const FloatingBox right_area = {
+                        ._pos =
+                            {
+                                ._x = to_right_abs + 1,
+                                ._y = params._from._y,
+                            },
+                        ._box =
+                            {
+                                ._width = from_right_abs - to_right_abs,
+                                ._height = params._contents._area._box._height,
+                            },
+                    };
+
+                    nodes.append(Instruction::createFillArea({
+                        ._area = right_area,
+                        ._ch = 'x',
+                    }));
+
+                    const FloatingBox top_area = {
+                        ._pos =
+                            {
+                                ._x = params._from._x,
+                                ._y = params._from._y,
+                            },
+                        ._box =
+                            {
+                                ._width = to_right_abs - params._from._x + 1,
+                                ._height = params._to._y - params._from._y,
+                            },
+                    };
+
+                    nodes.append(Instruction::createFillArea({
+                        ._area = top_area,
+                        ._ch = 'x',
+                    }));
+                } else {
+                    const FloatingBox top_area = {
+                        ._pos =
+                            {
+                                ._x = params._from._x,
+                                ._y = params._from._y,
+                            },
+                        ._box =
+                            {
+                                ._width = params._contents._area._box._width,
+                                ._height = params._to._y - params._from._y,
+                            },
+                    };
+
+                    nodes.append(Instruction::createFillArea({
+                        ._area = top_area,
+                        ._ch = 'x',
+                    }));
+                }
+            } else if(from_area.topRight().isInside(to_area)) {
+                const size_t from_right_abs = params._from._x + params._contents._area._box._width - 1;
+                const size_t from_bottom_abs = params._from._y + params._contents._area._box._height - 1;
+                const size_t to_bottom_abs = params._to._y + params._contents._area._box._height - 1;
+
+                if(!from_area.bottomRight().isInside(to_area)) {
+                    const FloatingBox left_area = {
+                        ._pos = params._from,
+                        ._box =
+                            {
+                                ._width = params._to._x - params._from._x,
+                                ._height = params._contents._area._box._height,
+                            },
+                    };
+
+                    nodes.append(Instruction::createFillArea({
+                        ._area = left_area,
+                        ._ch = 'x',
+                    }));
+
+                    const FloatingBox bottom_area = {
+                        ._pos =
+                            {
+                                ._x = params._to._x,
+                                ._y = to_bottom_abs + 1,
+                            },
+                        ._box =
+                            {
+                                ._width = from_right_abs - params._to._x,
+                                ._height = from_bottom_abs - to_bottom_abs,
+                            },
+                    };
+
+                    nodes.append(Instruction::createFillArea({
+                        ._area = bottom_area,
+                        ._ch = 'x',
+                    }));
+                } else {
+                    const FloatingBox left_area = {
+                        ._pos = params._from,
+                        ._box =
+                            {
+                                ._width = params._to._x - params._from._x,
+                                ._height = params._contents._area._box._height,
+                            },
+                    };
+
+                    nodes.append(Instruction::createFillArea({
+                        ._area = left_area,
+                        ._ch = 'x',
+                    }));
+                }
+            } else if(from_area.bottomRight().isInside(to_area)) {
+                const size_t from_right_abs = params._from._x + params._contents._area._box._width - 1;
+
+                const FloatingBox left_area = {
+                    ._pos = params._from,
+                    ._box =
+                        {
+                            ._width = params._to._x - params._from._x,
+                            ._height = params._contents._area._box._height,
+                        },
+                };
+
+                nodes.append(Instruction::createFillArea({
+                    ._area = left_area,
+                    ._ch = 'x',
+                }));
+
+                const FloatingBox top_area = {
+
+                    ._pos =
+                        {
+                            ._x = params._to._x,
+                            ._y = params._from._y,
+                        },
+                    ._box =
+                        {
+                            ._width = from_right_abs - params._to._x,
+                            ._height = params._to._y - params._from._y,
+                        },
+                };
+
+                nodes.append(Instruction::createFillArea({
+                    ._area = top_area,
+                    ._ch = 'x',
+                }));
+            } else {
+                nodes.append(Instruction::createFillArea({
+                    ._area = from_area,
+                    ._ch = 'x',
+                }));
+            }
+
+        ret:
+            auto items = nodes.take();
+            intermediate.emplaceNodesAtNode(items, instr_node);
+            return items;
         } break;
     }
 }
@@ -248,6 +513,10 @@ static void submit(LinkedList<Instruction>& intermediate, ArrayList<ControlSeq::
                 state._pos._x += params._len;
             } break;
             case InstrType::FillArea: {
+                cur = expand(cur, intermediate);
+                cur = cur->prev;
+            } break;
+            case InstrType::MoveArea: {
                 cur = expand(cur, intermediate);
                 cur = cur->prev;
             } break;
