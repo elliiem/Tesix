@@ -1,6 +1,6 @@
 #pragma once
 
-#include "space.hpp"
+#include "box.hpp"
 
 #include <cassert>
 #include <cstddef>
@@ -30,7 +30,7 @@ struct Buffer2D {
     inline void init(const size_t width, const size_t height) {
         assert(_buffer == nullptr);
 
-        _buffer = static_cast<T*>(malloc(width * height));
+        _buffer = static_cast<T*>(malloc(width * height * sizeof(T)));
 
         _box._width = width;
         _box._height = height;

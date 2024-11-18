@@ -1,8 +1,9 @@
 #pragma once
 
+#include "../box.hpp"
 #include "../buffer.hpp"
 #include "../linked_list.hpp"
-#include "../space.hpp"
+#include "../state.hpp"
 #include "../utf.hpp"
 #include "control_sequences.hpp"
 
@@ -11,7 +12,6 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <execution>
 
 namespace Tesix {
 
@@ -118,14 +118,6 @@ struct Instruction {
 using InstrNode = Node<Instruction>*;
 using InstrList = LinkedList<Instruction>;
 
-struct State {
-    Position _pos;
-    uint64_t _style;
-    uint32_t _last_ch;
-    Buffer2D<uint32_t>& _screen_buffer;
-    Box _term_area;
-};
-
 static void submitSetCursor(Position pos, ArrayList<ControlSeq::Instruction, Dynamic>& esc, State& state) {
     if(state._pos._x == pos._x && state._pos._y == pos._y) {
         return;
@@ -163,28 +155,6 @@ static Node<Instruction>* expand(Node<Instruction>* instr_node, LinkedList<Instr
     const auto& instr = instr_node->value;
 
     switch(instr._type) {
-        case InstrType::ClearArea: {
-            const auto& params = instr._params.ClearArea;
-
-            assert(params._area.takesUpSpace());
-
-            LinkedList<Instruction> nodes;
-            nodes.init();
-
-            for(size_t line = params._area._pos._y; line < params._area.bottom(); line++) {
-                nodes.append(Instruction::createRepeat({
-                    ._pos = {params._area._pos._x, line},
-                    ._ch = ' ',
-                    ._n = params._area._box._width,
-                }));
-            }
-
-            auto items = nodes.take();
-
-            intermediate.emplaceNodesAtNode(items, instr_node);
-
-            return items;
-        } break;
         case InstrType::FillArea: {
             const auto& params = instr._params.FillArea;
 
@@ -193,18 +163,36 @@ static Node<Instruction>* expand(Node<Instruction>* instr_node, LinkedList<Instr
             InstrList nodes;
             nodes.init();
 
-            for(size_t line = params._area._pos._y; line <= params._area.bottom(); line++) {
+            for(size_t y = params._area._pos._y; y <= params._area.bottom(); y++) {
                 nodes.append(Instruction::createRepeat({
-                    ._pos = {params._area._pos._x, line},
+                    ._pos = {._x = params._area._pos._x, ._y = y},
                     ._ch = params._ch,
                     ._n = params._area._box._width,
                 }));
             }
 
             auto items = nodes.take();
-
             intermediate.emplaceNodesAtNode(items, instr_node);
+            return items;
+        } break;
+        case InstrType::DrawBuffer: {
+            const auto& params = instr._params.DrawBuffer;
 
+            assert(params._contents._area.takesUpSpace());
+
+            InstrList nodes;
+            nodes.init();
+
+            for(size_t line = 0; line < params._contents._area._box._height; line++) {
+                nodes.append(Instruction::createInsertString({
+                    ._pos = {._x = params._pos._x, ._y = line + params._pos._y},
+                    ._str = params._contents._parent->_buffer + params._contents.index(0, line),
+                    ._len = params._contents._area._box._width,
+                }));
+            }
+
+            auto items = nodes.take();
+            intermediate.emplaceNodesAtNode(items, instr_node);
             return items;
         } break;
         case InstrType::MoveArea: {
@@ -215,14 +203,15 @@ static Node<Instruction>* expand(Node<Instruction>* instr_node, LinkedList<Instr
             const FloatingBox to_area = {._pos = params._to, ._box = params._contents._area._box};
             const FloatingBox from_area = {._pos = params._from, ._box = params._contents._area._box};
 
-            //  TODO: draw buffer not just fill
             nodes.append(Instruction::createFillArea({
                 ._area = to_area,
                 ._ch = '#',
             }));
 
             if(to_area.contains(from_area)) {
-                goto ret;
+                auto items = nodes.take();
+                intermediate.emplaceNodesAtNode(items, instr_node);
+                return items;
             }
 
             if(from_area.topLeft().isInside(to_area) && !from_area.bottomRight().isInside(to_area)) {
@@ -458,9 +447,30 @@ static Node<Instruction>* expand(Node<Instruction>* instr_node, LinkedList<Instr
                 }));
             }
 
-        ret:
             auto items = nodes.take();
             intermediate.emplaceNodesAtNode(items, instr_node);
+            return items;
+        } break;
+        case InstrType::ClearArea: {
+            const auto& params = instr._params.ClearArea;
+
+            assert(params._area.takesUpSpace());
+
+            LinkedList<Instruction> nodes;
+            nodes.init();
+
+            for(size_t line = params._area._pos._y; line < params._area.bottom(); line++) {
+                nodes.append(Instruction::createRepeat({
+                    ._pos = {params._area._pos._x, line},
+                    ._ch = ' ',
+                    ._n = params._area._box._width,
+                }));
+            }
+
+            auto items = nodes.take();
+
+            intermediate.emplaceNodesAtNode(items, instr_node);
+
             return items;
         } break;
     }
@@ -513,6 +523,10 @@ static void submit(LinkedList<Instruction>& intermediate, ArrayList<ControlSeq::
                 state._pos._x += params._len;
             } break;
             case InstrType::FillArea: {
+                cur = expand(cur, intermediate);
+                cur = cur->prev;
+            } break;
+            case InstrType::DrawBuffer: {
                 cur = expand(cur, intermediate);
                 cur = cur->prev;
             } break;

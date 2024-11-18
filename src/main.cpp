@@ -38,43 +38,21 @@ int main() {
         Tesix::ControlSeq::Instruction::createErase(Tesix::ControlSeq::EraseInstruction::createEraseDisplay(Tesix::ControlSeq::EraseDisplay::All)));
     esc.append(Tesix::ControlSeq::Instruction::createCursor(Tesix::ControlSeq::CursorInstruction::createCursorTo({.row = 1, .column = 1})));
 
-    Tesix::Buffer2D<uint32_t> screen_buffer;
-
-    Tesix::Intermediary::State state = {
-        ._pos =
-            {
-                ._x = 0,
-                ._y = 0,
-            },
-        ._style = 0,
-        ._last_ch = ' ',
-        ._screen_buffer = screen_buffer,
-        ._term_area =
-            {
-                ._width = 128,
-                ._height = 90,
-            },
-    };
+    auto state = Tesix::State::inital();
 
     Tesix::LinkedList<Tesix::Intermediary::Instruction> intermediary;
     intermediary.init();
 
     Tesix::Buffer2D<uint32_t> contents(5, 5);
+    for(size_t i = 0; i < 25; i++) {
+        contents._buffer[i] = '0' + i;
+    }
 
-    intermediary.append(Tesix::Intermediary::Instruction::createMoveArea({
-        ._from =
-            {
-                ._x = 5,
-                ._y = 6,
-            },
-        ._to =
-            {
-                ._x = 5,
-                ._y = 5,
-            },
+    intermediary.append(Tesix::Intermediary::Instruction::createDrawBuffer({
+        ._pos = {10,10},
         ._contents = contents.subBuffer({
-            ._pos = {._x = 0, ._y = 0},
-            ._box = {._width = 5, ._height = 5},
+            ._pos = {._x = 0,._y = 0},
+            ._box = {._width = 5,._height = 5},
         }),
     }));
 
