@@ -43,7 +43,7 @@ consteval inline size_t unsetMask() {
 constexpr inline size_t bitMask(const size_t i) {
     assert(isValidBitIndex<size_t>(i));
 
-    return 0b1 << i;
+    return (size_t)0b1 << i;
 }
 
 /**

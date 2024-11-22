@@ -4,6 +4,7 @@
 #include "../buffer.hpp"
 #include "../linked_list.hpp"
 #include "../state.hpp"
+#include "../style.hpp"
 #include "../utf.hpp"
 #include "control_sequences.hpp"
 
@@ -25,6 +26,7 @@ enum class InstrType {
     DrawBuffer,
     MoveArea,
     Erase,
+    EraseArea,
     Clear,
     ClearFw,
     ClearBw,
@@ -32,44 +34,50 @@ enum class InstrType {
     ClearLineFw,
     ClearLineBw,
     ClearArea,
-    ChangeStyle,
+    RestoreArea,
+    ColorModifier,
 };
 
 struct InsertCharParams {
     Position _pos;
     uint32_t _ch;
+    const uint64_t* _style;
 };
 
 struct InsertStringParams {
     Position _pos;
     uint32_t* _str;
     size_t _len;
+    const uint64_t* _style;
 };
 
 struct FillAreaParams {
     FloatingBox _area;
     uint32_t _ch;
+    const uint64_t* _style;
 };
 
 struct MoveAreaParams {
-    Position _from;
+    FloatingBox _from;
     Position _to;
-    SubBuffer2D<uint32_t> _contents;
 };
 
 struct ClearAreaParams {
     FloatingBox _area;
+    const uint64_t* _style;
 };
 
 struct RepeatParams {
     Position _pos;
     uint32_t _ch;
     size_t _n;
+    const uint64_t* _style;
 };
 
 struct DrawBufferParams {
     Position _pos;
     SubBuffer2D<uint32_t> _contents;
+    SubBuffer2D<const uint64_t*> _styles;
 };
 
 union InstrParam {
@@ -118,6 +126,107 @@ struct Instruction {
 using InstrNode = Node<Instruction>*;
 using InstrList = LinkedList<Instruction>;
 
+static Nodes<Instruction> optGlobString(InstrList& intermediate, Node<Instruction>* instr_node) {
+    const auto& instr = instr_node->_value;
+
+    assert(instr._type == InstrType::InsertString);
+
+    const auto& params = instr._params.InsertString;
+
+    assert(params._len > 0);
+
+    InstrList instrs;
+    instrs.init();
+
+    uint32_t cur_ch = params._str[0];
+    uintmax_t ch_run = 1;
+
+    uintmax_t cur_str_start = 0;
+    uintmax_t cur_ch_start = 0;
+
+    for(uintmax_t i = 1; i < params._len; i++) {
+        if(i == params._len - 1) {
+            if(params._str[i] == cur_ch) {
+                ch_run += 1;
+            }
+
+            if(ch_run >= 5) {
+                if(cur_ch_start == cur_str_start) {
+                    instrs.append(Instruction::createRepeat({
+                        ._pos = {._x = params._pos._x + cur_ch_start, ._y = params._pos._y},
+                        ._ch = cur_ch,
+                        ._n = ch_run,
+                        ._style = params._style,
+                    }));
+                } else {
+                    instrs.append(Instruction::createInsertString({
+                        ._pos = {._x = params._pos._x + cur_str_start, ._y = params._pos._y},
+                        ._str = params._str + cur_str_start,
+                        ._len = cur_ch_start - cur_str_start,
+                        ._style = params._style,
+                    }));
+
+                    instrs.append(Instruction::createRepeat({
+                        ._pos = {._x = params._pos._x + cur_ch_start, ._y = params._pos._y},
+                        ._ch = cur_ch,
+                        ._n = ch_run,
+                        ._style = params._style,
+                    }));
+                }
+            } else {
+                instrs.append(Instruction::createInsertString({
+                    ._pos = {._x = params._pos._x + cur_str_start, ._y = params._pos._y},
+                    ._str = params._str + cur_str_start,
+                    ._len = params._len - cur_str_start,
+                    ._style = params._style,
+                }));
+            }
+
+            break;
+        }
+
+        if(params._str[i] == cur_ch) {
+            ch_run += 1;
+        } else {
+            if(ch_run >= 5) {
+                if(cur_ch_start == cur_str_start) {
+                    instrs.append(Instruction::createRepeat({
+                        ._pos = {._x = params._pos._x + cur_ch_start, ._y = params._pos._y},
+                        ._ch = cur_ch,
+                        ._n = ch_run,
+                        ._style = params._style,
+                    }));
+
+                    cur_str_start = i;
+                } else {
+                    instrs.append(Instruction::createInsertString({
+                        ._pos = {._x = params._pos._x + cur_str_start, ._y = params._pos._y},
+                        ._str = params._str + cur_str_start,
+                        ._len = cur_ch_start - cur_str_start,
+                        ._style = params._style,
+                    }));
+
+                    instrs.append(Instruction::createRepeat({
+                        ._pos = {._x = params._pos._x + cur_ch_start, ._y = params._pos._y},
+                        ._ch = cur_ch,
+                        ._n = ch_run,
+                        ._style = params._style,
+                    }));
+                }
+            }
+
+            cur_ch = params._str[i];
+            ch_run = 1;
+
+            cur_ch_start = i;
+        }
+    }
+
+    auto items = instrs.takeItems();
+    intermediate.nodeReplaceMulti(items, instr_node);
+    return items;
+}
+
 static void submitSetCursor(Position pos, ArrayList<ControlSeq::Instruction, Dynamic>& esc, State& state) {
     if(state._pos._x == pos._x && state._pos._y == pos._y) {
         return;
@@ -143,16 +252,215 @@ static void submitSetCursor(Position pos, ArrayList<ControlSeq::Instruction, Dyn
         }
     } else {
         esc.append(ControlSeq::Instruction::createCursor(ControlSeq::CursorInstruction::createCursorTo({
-            .row = pos._x + 1,
-            .column = pos._y + 1,
+            ._row = pos._x + 1,
+            ._column = pos._y + 1,
         })));
     }
 
     state._pos = pos;
 }
 
-static Node<Instruction>* expand(Node<Instruction>* instr_node, LinkedList<Instruction>& intermediate) {
-    const auto& instr = instr_node->value;
+static void submitStyleFCFMFromDefault(const Style::Style& target, ArrayList<ControlSeq::Instruction, Dynamic>& esc) {
+    switch(target._fg.FCFM._tag) {
+        case Style::ColorMode::Default: {
+        } break;
+        case Style::ColorMode::FullColor: {
+            esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createForegroundFullColor({
+                ._r = target._fg.FCFM._value.FC._r,
+                ._g = target._fg.FCFM._value.FC._g,
+                ._b = target._fg.FCFM._value.FC._b,
+            })));
+        } break;
+        case Style::ColorMode::Palette: {
+            esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createForegroundColor(target._fg.FCFM._value.P)));
+        } break;
+    }
+
+    switch(target._bg.FCFM._tag) {
+        case Style::ColorMode::Default: {
+        } break;
+        case Style::ColorMode::FullColor: {
+            esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createForegroundFullColor({
+                ._r = target._bg.FCFM._value.FC._r,
+                ._g = target._bg.FCFM._value.FC._g,
+                ._b = target._bg.FCFM._value.FC._b,
+            })));
+        } break;
+        case Style::ColorMode::Palette: {
+            esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createForegroundColor(target._bg.FCFM._value.P)));
+        } break;
+    }
+
+    if(target._mod.FCFM._bold) {
+        esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createBold(true)));
+    }
+
+    if(target._mod.FCFM._italic) {
+        esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createItalic(true)));
+    }
+
+    if(target._mod.FCFM._underlined) {
+        esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createUnderlined(true)));
+    }
+
+    if(target._mod.FCFM._blinking) {
+        esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createBlinking(true)));
+    }
+
+    if(target._mod.FCFM._reverse) {
+        esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createReversed(true)));
+    }
+
+    if(target._mod.FCFM._strikethrough) {
+        esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createStrikethrough(true)));
+    }
+}
+
+static void submitStyleFCFMToFCFM(const Style::Style& cur, const Style::Style& target, ArrayList<ControlSeq::Instruction, Dynamic>& esc) {
+    switch(cur._fg.FCFM._tag) {
+        case Style::ColorMode::Default: {
+            switch(target._fg.FCFM._tag) {
+                case Style::ColorMode::Default: {
+                } break;
+                case Style::ColorMode::FullColor: {
+                    esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createForegroundFullColor({
+                        ._r = target._fg.FCFM._value.FC._r,
+                        ._g = target._fg.FCFM._value.FC._g,
+                        ._b = target._fg.FCFM._value.FC._b,
+                    })));
+                }
+                case Style::ColorMode::Palette: {
+                    esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createForegroundColor(target._fg.FCFM._value.P)));
+                }
+            }
+        } break;
+        case Style::ColorMode::FullColor: {
+            switch(target._fg.FCFM._tag) {
+                case Style::ColorMode::Default: {
+                    esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createResetStyle()));
+
+                    submitStyleFCFMFromDefault(target, esc);
+                } break;
+                case Style::ColorMode::FullColor: {
+                    if(cur._fg.FCFM._value.FC != target._fg.FCFM._value.FC) {
+                        esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createForegroundFullColor({
+                            ._r = target._fg.FCFM._value.FC._r,
+                            ._g = target._fg.FCFM._value.FC._g,
+                            ._b = target._fg.FCFM._value.FC._b,
+                        })));
+                    }
+                } break;
+                case Style::ColorMode::Palette: {
+                    esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createForegroundColor(target._fg.FCFM._value.P)));
+                } break;
+            }
+        } break;
+        case Style::ColorMode::Palette: {
+            switch(target._fg.FCFM._tag) {
+                case Style::ColorMode::Default: {
+                    esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createResetStyle()));
+
+                    submitStyleFCFMFromDefault(target, esc);
+                } break;
+                case Style::ColorMode::FullColor: {
+                    esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createForegroundFullColor({
+                        ._r = target._fg.FCFM._value.FC._r,
+                        ._g = target._fg.FCFM._value.FC._g,
+                        ._b = target._fg.FCFM._value.FC._b,
+                    })));
+                } break;
+                case Style::ColorMode::Palette: {
+                    if(cur._fg.FCFM._value.P == target._fg.FCFM._value.P) {
+                        esc.append(
+                            ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createForegroundColor(target._fg.FCFM._value.P)));
+                    }
+                } break;
+            }
+        } break;
+    }
+
+    switch(cur._bg.FCFM._tag) {
+        case Style::ColorMode::Default: {
+            switch(target._bg.FCFM._tag) {
+                case Style::ColorMode::Default: {
+                } break;
+                case Style::ColorMode::FullColor: {
+                    esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createBackgroundFullColor({
+                        ._r = target._bg.FCFM._value.FC._r,
+                        ._g = target._bg.FCFM._value.FC._g,
+                        ._b = target._bg.FCFM._value.FC._b,
+                    })));
+                } break;
+                case Style::ColorMode::Palette: {
+                    esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createBackgroundColor(target._bg.FCFM._value.P)));
+                } break;
+            }
+        } break;
+        case Style::ColorMode::FullColor: {
+            switch(target._bg.FCFM._tag) {
+                case Style::ColorMode::Default: {
+                    esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createResetStyle()));
+
+                    submitStyleFCFMFromDefault(target, esc);
+                } break;
+                case Style::ColorMode::FullColor: {
+                    if(cur._bg.FCFM._value.FC == target._bg.FCFM._value.FC) {
+                        esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createBackgroundFullColor({
+                            ._r = target._bg.FCFM._value.FC._r,
+                            ._g = target._bg.FCFM._value.FC._g,
+                            ._b = target._bg.FCFM._value.FC._b,
+                        })));
+                    }
+                } break;
+                case Style::ColorMode::Palette: {
+                    esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createBackgroundColor(target._bg.FCFM._value.P)));
+                } break;
+            }
+        } break;
+        case Style::ColorMode::Palette: {
+            switch(target._bg.FCFM._tag) {
+                case Style::ColorMode::Default: {
+                    esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createResetStyle()));
+
+                    submitStyleFCFMFromDefault(target, esc);
+                } break;
+                case Style::ColorMode::FullColor: {
+                    esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createBackgroundFullColor({
+                        ._r = target._bg.FCFM._value.FC._r,
+                        ._g = target._bg.FCFM._value.FC._g,
+                        ._b = target._bg.FCFM._value.FC._b,
+                    })));
+                } break;
+                case Style::ColorMode::Palette: {
+                    if(cur._bg.FCFM._value.P == target._bg.FCFM._value.P) {
+                        esc.append(
+                            ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createBackgroundColor(target._bg.FCFM._value.P)));
+                    }
+                } break;
+            }
+        } break;
+    }
+}
+
+static void submitStyle(uint64_t target_enc, ArrayList<ControlSeq::Instruction, Dynamic>& esc, State& state) {
+    assert(state._style != nullptr);
+
+    const auto cur = Style::Style::fromEncoding(*state._style);
+    const auto target = Style::Style::fromEncoding(target_enc);
+
+    switch(cur._tag) {
+        case Style::StyleEncoding::FCFM: {
+            switch(target._tag) {
+                case Style::StyleEncoding::FCFM: {
+                    submitStyleFCFMToFCFM(cur, target, esc);
+                } break;
+            }
+        } break;
+    }
+}
+
+static Nodes<Instruction> expand(InstrNode instr_node, InstrList& intermediate) {
+    auto& instr = instr_node->_value;
 
     switch(instr._type) {
         case InstrType::FillArea: {
@@ -168,287 +476,52 @@ static Node<Instruction>* expand(Node<Instruction>* instr_node, LinkedList<Instr
                     ._pos = {._x = params._area._pos._x, ._y = y},
                     ._ch = params._ch,
                     ._n = params._area._box._width,
+                    ._style = params._style,
                 }));
             }
 
-            auto items = nodes.take();
-            intermediate.emplaceNodesAtNode(items, instr_node);
+            auto items = nodes.takeItems();
+            intermediate.nodeReplaceMulti(items, instr_node);
             return items;
         } break;
         case InstrType::DrawBuffer: {
-            const auto& params = instr._params.DrawBuffer;
+            auto& params = instr._params.DrawBuffer;
 
             assert(params._contents._area.takesUpSpace());
 
-            InstrList nodes;
-            nodes.init();
+            InstrList instrs;
+            instrs.init();
 
-            for(size_t line = 0; line < params._contents._area._box._height; line++) {
-                nodes.append(Instruction::createInsertString({
-                    ._pos = {._x = params._pos._x, ._y = line + params._pos._y},
-                    ._str = params._contents._parent->_buffer + params._contents.index(0, line),
-                    ._len = params._contents._area._box._width,
+            for(uintmax_t y = 0; y < params._contents._area._box._height; y++) {
+                uintmax_t cur_style_start = 0;
+                const uint64_t*& cur_style = params._styles.at(0, y);
+
+                for(uintmax_t x = 1; x < params._contents._area._box._width; x++) {
+                    const uint64_t*& ch_style = params._styles.at(x, y);
+
+                    if(ch_style != cur_style) {
+                        instrs.append(Instruction::createInsertString({
+                            ._pos = {params._pos._x + cur_style_start, params._pos._y + y},
+                            ._str = params._contents._parent->_buffer + params._contents.index(cur_style_start, y),
+                            ._len = x - cur_style_start,
+                            ._style = cur_style,
+                        }));
+
+                        cur_style_start = x;
+                        cur_style = ch_style;
+                    }
+                }
+
+                instrs.append(Instruction::createInsertString({
+                    ._pos = {params._pos._x + cur_style_start, params._pos._y + y},
+                    ._str = params._contents._parent->_buffer + params._contents.index(cur_style_start, y),
+                    ._len = params._contents._area._box._width - 1 - cur_style_start,
+                    ._style = cur_style,
                 }));
             }
 
-            auto items = nodes.take();
-            intermediate.emplaceNodesAtNode(items, instr_node);
-            return items;
-        } break;
-        case InstrType::MoveArea: {
-            const auto& params = instr._params.MoveArea;
-            InstrList nodes;
-            nodes.init();
-
-            const FloatingBox to_area = {._pos = params._to, ._box = params._contents._area._box};
-            const FloatingBox from_area = {._pos = params._from, ._box = params._contents._area._box};
-
-            nodes.append(Instruction::createFillArea({
-                ._area = to_area,
-                ._ch = '#',
-            }));
-
-            if(to_area.contains(from_area)) {
-                auto items = nodes.take();
-                intermediate.emplaceNodesAtNode(items, instr_node);
-                return items;
-            }
-
-            if(from_area.topLeft().isInside(to_area) && !from_area.bottomRight().isInside(to_area)) {
-                const size_t from_right_abs = params._from._x + params._contents._area._box._width - 1;
-                const size_t to_right_abs = params._to._x + params._contents._area._box._width - 1;
-                const size_t from_bottom_abs = params._from._y + params._contents._area._box._height - 1;
-                const size_t to_bottom_abs = params._to._y + params._contents._area._box._height - 1;
-
-                if(!from_area.topRight().isInside(to_area) && !from_area.bottomLeft().isInside(to_area)) {
-                    const FloatingBox right_area = {
-                        ._pos =
-                            {
-                                ._x = to_right_abs + 1,
-                                ._y = params._from._y,
-                            },
-                        ._box =
-                            {
-                                ._width = from_right_abs - to_right_abs,
-                                ._height = params._contents._area._box._height,
-                            },
-                    };
-
-                    nodes.append(Instruction::createFillArea({
-                        ._area = right_area,
-                        ._ch = 'x',
-                    }));
-
-                    const FloatingBox bottom_area = {
-                        ._pos =
-                            {
-                                ._x = params._from._x,
-                                ._y = to_bottom_abs + 1,
-                            },
-                        ._box =
-                            {
-                                ._width = to_right_abs - params._from._x + 1,
-                                ._height = from_bottom_abs - to_bottom_abs,
-                            },
-
-                    };
-
-                    nodes.append(Instruction::createFillArea({
-                        ._area = bottom_area,
-                        ._ch = 'x',
-                    }));
-                } else if(from_area.topRight().isInside(to_area)) {
-                    const FloatingBox bottom_area = {
-                        ._pos =
-                            {
-                                ._x = params._from._x,
-                                ._y = to_bottom_abs + 1,
-                            },
-                        ._box =
-                            {
-                                ._width = params._contents._area._box._width,
-                                ._height = from_bottom_abs - to_bottom_abs,
-                            },
-                    };
-
-                    nodes.append(Instruction::createFillArea({
-                        ._area = bottom_area,
-                        ._ch = 'x',
-                    }));
-                } else {
-                    const FloatingBox right_area = {
-                        ._pos =
-                            {
-                                ._x = to_right_abs + 1,
-                                ._y = params._from._y,
-                            },
-                        ._box =
-                            {
-                                ._width = from_right_abs - to_right_abs,
-                                ._height = params._contents._area._box._height,
-                            },
-                    };
-
-                    nodes.append(Instruction::createFillArea({
-                        ._area = right_area,
-                        ._ch = 'x',
-                    }));
-                }
-            } else if(from_area.bottomLeft().isInside(to_area)) {
-                const size_t from_right_abs = params._from._x + params._contents._area._box._width - 1;
-                const size_t to_right_abs = params._to._x + params._contents._area._box._width - 1;
-
-                if(!from_area.bottomRight().isInside(to_area)) {
-                    const FloatingBox right_area = {
-                        ._pos =
-                            {
-                                ._x = to_right_abs + 1,
-                                ._y = params._from._y,
-                            },
-                        ._box =
-                            {
-                                ._width = from_right_abs - to_right_abs,
-                                ._height = params._contents._area._box._height,
-                            },
-                    };
-
-                    nodes.append(Instruction::createFillArea({
-                        ._area = right_area,
-                        ._ch = 'x',
-                    }));
-
-                    const FloatingBox top_area = {
-                        ._pos =
-                            {
-                                ._x = params._from._x,
-                                ._y = params._from._y,
-                            },
-                        ._box =
-                            {
-                                ._width = to_right_abs - params._from._x + 1,
-                                ._height = params._to._y - params._from._y,
-                            },
-                    };
-
-                    nodes.append(Instruction::createFillArea({
-                        ._area = top_area,
-                        ._ch = 'x',
-                    }));
-                } else {
-                    const FloatingBox top_area = {
-                        ._pos =
-                            {
-                                ._x = params._from._x,
-                                ._y = params._from._y,
-                            },
-                        ._box =
-                            {
-                                ._width = params._contents._area._box._width,
-                                ._height = params._to._y - params._from._y,
-                            },
-                    };
-
-                    nodes.append(Instruction::createFillArea({
-                        ._area = top_area,
-                        ._ch = 'x',
-                    }));
-                }
-            } else if(from_area.topRight().isInside(to_area)) {
-                const size_t from_right_abs = params._from._x + params._contents._area._box._width - 1;
-                const size_t from_bottom_abs = params._from._y + params._contents._area._box._height - 1;
-                const size_t to_bottom_abs = params._to._y + params._contents._area._box._height - 1;
-
-                if(!from_area.bottomRight().isInside(to_area)) {
-                    const FloatingBox left_area = {
-                        ._pos = params._from,
-                        ._box =
-                            {
-                                ._width = params._to._x - params._from._x,
-                                ._height = params._contents._area._box._height,
-                            },
-                    };
-
-                    nodes.append(Instruction::createFillArea({
-                        ._area = left_area,
-                        ._ch = 'x',
-                    }));
-
-                    const FloatingBox bottom_area = {
-                        ._pos =
-                            {
-                                ._x = params._to._x,
-                                ._y = to_bottom_abs + 1,
-                            },
-                        ._box =
-                            {
-                                ._width = from_right_abs - params._to._x,
-                                ._height = from_bottom_abs - to_bottom_abs,
-                            },
-                    };
-
-                    nodes.append(Instruction::createFillArea({
-                        ._area = bottom_area,
-                        ._ch = 'x',
-                    }));
-                } else {
-                    const FloatingBox left_area = {
-                        ._pos = params._from,
-                        ._box =
-                            {
-                                ._width = params._to._x - params._from._x,
-                                ._height = params._contents._area._box._height,
-                            },
-                    };
-
-                    nodes.append(Instruction::createFillArea({
-                        ._area = left_area,
-                        ._ch = 'x',
-                    }));
-                }
-            } else if(from_area.bottomRight().isInside(to_area)) {
-                const size_t from_right_abs = params._from._x + params._contents._area._box._width - 1;
-
-                const FloatingBox left_area = {
-                    ._pos = params._from,
-                    ._box =
-                        {
-                            ._width = params._to._x - params._from._x,
-                            ._height = params._contents._area._box._height,
-                        },
-                };
-
-                nodes.append(Instruction::createFillArea({
-                    ._area = left_area,
-                    ._ch = 'x',
-                }));
-
-                const FloatingBox top_area = {
-
-                    ._pos =
-                        {
-                            ._x = params._to._x,
-                            ._y = params._from._y,
-                        },
-                    ._box =
-                        {
-                            ._width = from_right_abs - params._to._x,
-                            ._height = params._to._y - params._from._y,
-                        },
-                };
-
-                nodes.append(Instruction::createFillArea({
-                    ._area = top_area,
-                    ._ch = 'x',
-                }));
-            } else {
-                nodes.append(Instruction::createFillArea({
-                    ._area = from_area,
-                    ._ch = 'x',
-                }));
-            }
-
-            auto items = nodes.take();
-            intermediate.emplaceNodesAtNode(items, instr_node);
+            auto items = instrs.takeItems();
+            intermediate.nodeReplaceMulti(items, instr_node);
             return items;
         } break;
         case InstrType::ClearArea: {
@@ -464,13 +537,12 @@ static Node<Instruction>* expand(Node<Instruction>* instr_node, LinkedList<Instr
                     ._pos = {params._area._pos._x, line},
                     ._ch = ' ',
                     ._n = params._area._box._width,
+                    ._style = params._style,
                 }));
             }
 
-            auto items = nodes.take();
-
-            intermediate.emplaceNodesAtNode(items, instr_node);
-
+            auto items = nodes.takeItems();
+            intermediate.nodeReplaceMulti(items, instr_node);
             return items;
         } break;
     }
@@ -482,9 +554,9 @@ static void submit(LinkedList<Instruction>& intermediate, ArrayList<ControlSeq::
     Node<Instruction>* cur = intermediate.first();
 
     while(cur != nullptr) {
-        const Instruction instr = cur->value;
+        const Instruction instr = cur->_value;
 
-        switch(cur->value._type) {
+        switch(cur->_value._type) {
             case InstrType::InsertChar: {
                 const InsertCharParams params = instr._params.InsertChar;
 
@@ -495,10 +567,11 @@ static void submit(LinkedList<Instruction>& intermediate, ArrayList<ControlSeq::
                 UTF8::encodeCodepoint(params._ch, utf8);
 
                 submitSetCursor(params._pos, esc, state);
+                submitStyle(*params._style, esc, state);
 
                 esc.append(ControlSeq::Instruction::createInsert(ControlSeq::InsertInstrucion::createInsertString({
-                    .str = utf8,
-                    .len = utf8_str_len,
+                    ._str = utf8,
+                    ._len = utf8_str_len,
                 })));
 
                 state._last_ch = params._ch;
@@ -513,31 +586,33 @@ static void submit(LinkedList<Instruction>& intermediate, ArrayList<ControlSeq::
                 UTF8::encodeCodepointStr(params._str, params._len, utf8);
 
                 submitSetCursor(params._pos, esc, state);
+                submitStyle(*params._style, esc, state);
 
                 esc.append(ControlSeq::Instruction::createInsert(ControlSeq::InsertInstrucion::createInsertString({
-                    .str = utf8,
-                    .len = utf8_len,
+                    ._str = utf8,
+                    ._len = utf8_len,
                 })));
 
                 state._last_ch = params._str[params._len - 1];
                 state._pos._x += params._len;
             } break;
             case InstrType::FillArea: {
-                cur = expand(cur, intermediate);
-                cur = cur->prev;
+                cur = expand(cur, intermediate)._front;
+                cur = cur->_prev;
             } break;
             case InstrType::DrawBuffer: {
-                cur = expand(cur, intermediate);
-                cur = cur->prev;
+                cur = expand(cur, intermediate)._front;
+                cur = cur->_prev;
             } break;
             case InstrType::MoveArea: {
-                cur = expand(cur, intermediate);
-                cur = cur->prev;
+                cur = expand(cur, intermediate)._front;
+                cur = cur->_prev;
             } break;
             case InstrType::Repeat: {
                 const RepeatParams params = instr._params.Repeat;
 
                 submitSetCursor(params._pos, esc, state);
+                submitStyle(*params._style, esc, state);
 
                 if(state._last_ch != params._ch) {
                     const size_t utf8_len = UTF8::codepointLen(params._ch);
@@ -546,8 +621,8 @@ static void submit(LinkedList<Instruction>& intermediate, ArrayList<ControlSeq::
                     UTF8::encodeCodepoint(params._ch, utf8);
 
                     esc.append(ControlSeq::Instruction::createInsert(ControlSeq::InsertInstrucion::createInsertString({
-                        .str = utf8,
-                        .len = utf8_len,
+                        ._str = utf8,
+                        ._len = utf8_len,
                     })));
 
                     state._last_ch = params._ch;
@@ -561,16 +636,16 @@ static void submit(LinkedList<Instruction>& intermediate, ArrayList<ControlSeq::
             }
         }
 
-        cur = cur->next;
+        cur = cur->_next;
     }
 }
 
 static void resolveCharOnStringOverdraw(InstrNode drawer, InstrNode drawee, InstrList& intermediate) {
-    const auto& drawer_instr = drawer->value;
+    const auto& drawer_instr = drawer->_value;
     assert(drawer_instr._type == InstrType::InsertChar);
     const auto& drawer_params = drawer_instr._params.InsertChar;
 
-    auto& drawee_instr = drawee->value;
+    auto& drawee_instr = drawee->_value;
     assert(drawee_instr._type == InstrType::InsertString);
     auto& drawee_params = drawee_instr._params.InsertString;
 
@@ -591,16 +666,16 @@ static void resolveCharOnStringOverdraw(InstrNode drawer, InstrNode drawee, Inst
 
         drawee_params._len = index;
 
-        intermediate.insertAtNode(new_instr, drawee);
+        intermediate.nodeAppend(new_instr, drawee);
     }
 }
 
 static void resolveStringOnStringOverdraw(InstrNode drawer, InstrNode drawee, InstrList& intermediate) {
-    const auto& drawer_instr = drawer->value;
+    const auto& drawer_instr = drawer->_value;
     assert(drawer_instr._type == InstrType::InsertString);
     const auto& drawer_params = drawer_instr._params.InsertString;
 
-    auto& drawee_instr = drawee->value;
+    auto& drawee_instr = drawee->_value;
     assert(drawer_instr._type == InstrType::InsertString);
     auto& drawee_params = drawee_instr._params.InsertString;
 
@@ -609,7 +684,7 @@ static void resolveStringOnStringOverdraw(InstrNode drawer, InstrNode drawee, In
 
     if(drawer_params._pos._x <= drawee_params._pos._x) {
         if(drawer_end_i > drawee_end_i) {
-            intermediate.eraseNode(drawee);
+            intermediate.nodeErase(drawee);
         } else {
             const size_t n = drawer_end_i - drawee_params._pos._x;
 
@@ -630,16 +705,16 @@ static void resolveStringOnStringOverdraw(InstrNode drawer, InstrNode drawee, In
 
         drawee_params._len = index;
 
-        intermediate.insertAtNode(new_instr, drawee);
+        intermediate.nodeAppend(new_instr, drawee);
     }
 }
 
 static void resolveCharOnAnyOverdraw(InstrNode drawer, InstrNode drawee, InstrList& intermediate) {
-    const auto& drawee_instr = drawee->value;
+    const auto& drawee_instr = drawee->_value;
 
     switch(drawee_instr._type) {
         case InstrType::InsertChar: {
-            intermediate.eraseNode(drawee);
+            intermediate.nodeErase(drawee);
         } break;
         case InstrType::InsertString: {
             resolveCharOnStringOverdraw(drawer, drawee, intermediate);
@@ -648,15 +723,15 @@ static void resolveCharOnAnyOverdraw(InstrNode drawer, InstrNode drawee, InstrLi
 }
 
 static void resolveStringOnAnyOverdraw(InstrNode drawer, InstrNode drawee, InstrList& intermediate) {
-    const auto& drawer_instr = drawer->value;
+    const auto& drawer_instr = drawer->_value;
     assert(drawer_instr._type == InstrType::InsertString);
     const auto& drawer_params = drawer_instr._params.InsertString;
 
-    const auto& drawee_instr = drawee->value;
+    const auto& drawee_instr = drawee->_value;
 
     switch(drawee_instr._type) {
         case InstrType::InsertChar: {
-            intermediate.eraseNode(drawee);
+            intermediate.nodeErase(drawee);
         } break;
         case InstrType::InsertString: {
             resolveStringOnStringOverdraw(drawer, drawee, intermediate);
@@ -664,7 +739,7 @@ static void resolveStringOnAnyOverdraw(InstrNode drawer, InstrNode drawee, Instr
         case InstrType::ClearArea: {
             const auto& drawee_params = drawee_instr._params.ClearArea;
 
-            InstrNode lines_front = expand(drawee, intermediate);
+            InstrNode lines_front = expand(drawee, intermediate)._front;
 
             InstrNode overdraw_line = getNodeForwards(lines_front, drawer_params._pos._y - drawer_params._pos._y);
 
@@ -674,7 +749,7 @@ static void resolveStringOnAnyOverdraw(InstrNode drawer, InstrNode drawee, Instr
 }
 
 static void resolveOverdraw(InstrNode drawer, InstrNode drawee, InstrList& intermediate) {
-    auto& drawer_instr = drawer->value;
+    auto& drawer_instr = drawer->_value;
 
     switch(drawer_instr._type) {
         case InstrType::InsertChar: {
