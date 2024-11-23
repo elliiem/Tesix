@@ -234,27 +234,27 @@ static void submitSetCursor(Position pos, ArrayList<ControlSeq::Instruction, Dyn
 
     if(state._pos._y == pos._y) {
         if(state._pos._x > pos._x) {
-            esc.append(ControlSeq::Instruction::createCursor(ControlSeq::CursorInstruction::createCursorLeft(state._pos._x - pos._x)));
+            esc.append(ControlSeq::Instruction::createCursorLeft(state._pos._x - pos._x));
         } else {
-            esc.append(ControlSeq::Instruction::createCursor(ControlSeq::CursorInstruction::createCursorRight(pos._x - state._pos._x)));
+            esc.append(ControlSeq::Instruction::createCursorRight(pos._x - state._pos._x));
         }
     } else if(state._pos._x == pos._x) {
         if(state._pos._y > pos._y) {
-            esc.append(ControlSeq::Instruction::createCursor(ControlSeq::CursorInstruction::createCursorUp(state._pos._y - pos._y)));
+            esc.append(ControlSeq::Instruction::createCursorUp(state._pos._y - pos._y));
         } else {
-            esc.append(ControlSeq::Instruction::createCursor(ControlSeq::CursorInstruction::createCursorDown(pos._y - state._pos._y)));
+            esc.append(ControlSeq::Instruction::createCursorDown(pos._y - state._pos._y));
         }
     } else if(pos._x == 0) {
         if(state._pos._y > pos._y) {
-            esc.append(ControlSeq::Instruction::createCursor(ControlSeq::CursorInstruction::createCursorUpBegin(state._pos._y - pos._y)));
+            esc.append(ControlSeq::Instruction::createCursorUpBegin(state._pos._y - pos._y));
         } else {
-            esc.append(ControlSeq::Instruction::createCursor(ControlSeq::CursorInstruction::createCursorDownBegin(pos._y - state._pos._y)));
+            esc.append(ControlSeq::Instruction::createCursorDownBegin(pos._y - state._pos._y));
         }
     } else {
-        esc.append(ControlSeq::Instruction::createCursor(ControlSeq::CursorInstruction::createCursorTo({
+        esc.append(ControlSeq::Instruction::createCursorTo({
             ._row = pos._x + 1,
             ._column = pos._y + 1,
-        })));
+        }));
     }
 
     state._pos = pos;
@@ -265,14 +265,14 @@ static void submitStyleFCFMFromDefault(const Style::Style& target, ArrayList<Con
         case Style::ColorMode::Default: {
         } break;
         case Style::ColorMode::FullColor: {
-            esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createForegroundFullColor({
+            esc.append(ControlSeq::Instruction::createForegroundFullColor({
                 ._r = target._fg.FCFM._value.FC._r,
                 ._g = target._fg.FCFM._value.FC._g,
                 ._b = target._fg.FCFM._value.FC._b,
-            })));
+            }));
         } break;
         case Style::ColorMode::Palette: {
-            esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createForegroundColor(target._fg.FCFM._value.P)));
+            esc.append(ControlSeq::Instruction::createForegroundColor(target._fg.FCFM._value.P));
         } break;
     }
 
@@ -280,39 +280,39 @@ static void submitStyleFCFMFromDefault(const Style::Style& target, ArrayList<Con
         case Style::ColorMode::Default: {
         } break;
         case Style::ColorMode::FullColor: {
-            esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createForegroundFullColor({
+            esc.append(ControlSeq::Instruction::createForegroundFullColor({
                 ._r = target._bg.FCFM._value.FC._r,
                 ._g = target._bg.FCFM._value.FC._g,
                 ._b = target._bg.FCFM._value.FC._b,
-            })));
+            }));
         } break;
         case Style::ColorMode::Palette: {
-            esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createForegroundColor(target._bg.FCFM._value.P)));
+            esc.append(ControlSeq::Instruction::createForegroundColor(target._bg.FCFM._value.P));
         } break;
     }
 
     if(target._mod.FCFM._bold) {
-        esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createBold(true)));
+        esc.append(ControlSeq::Instruction::createBold(true));
     }
 
     if(target._mod.FCFM._italic) {
-        esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createItalic(true)));
+        esc.append(ControlSeq::Instruction::createItalic(true));
     }
 
     if(target._mod.FCFM._underlined) {
-        esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createUnderlined(true)));
+        esc.append(ControlSeq::Instruction::createUnderlined(true));
     }
 
     if(target._mod.FCFM._blinking) {
-        esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createBlinking(true)));
+        esc.append(ControlSeq::Instruction::createBlinking(true));
     }
 
-    if(target._mod.FCFM._reverse) {
-        esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createReversed(true)));
+    if(target._mod.FCFM._reversed) {
+        esc.append(ControlSeq::Instruction::createReversed(true));
     }
 
     if(target._mod.FCFM._strikethrough) {
-        esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createStrikethrough(true)));
+        esc.append(ControlSeq::Instruction::createStrikethrough(true));
     }
 }
 
@@ -323,56 +323,56 @@ static void submitStyleFCFMToFCFM(const Style::Style& cur, const Style::Style& t
                 case Style::ColorMode::Default: {
                 } break;
                 case Style::ColorMode::FullColor: {
-                    esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createForegroundFullColor({
+                    esc.append(ControlSeq::Instruction::createForegroundFullColor({
                         ._r = target._fg.FCFM._value.FC._r,
                         ._g = target._fg.FCFM._value.FC._g,
                         ._b = target._fg.FCFM._value.FC._b,
-                    })));
+                    }));
                 }
                 case Style::ColorMode::Palette: {
-                    esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createForegroundColor(target._fg.FCFM._value.P)));
+                    esc.append(ControlSeq::Instruction::createForegroundColor(target._fg.FCFM._value.P));
                 }
             }
         } break;
         case Style::ColorMode::FullColor: {
             switch(target._fg.FCFM._tag) {
                 case Style::ColorMode::Default: {
-                    esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createResetStyle()));
+                    esc.append(ControlSeq::Instruction::createResetStyle());
 
                     submitStyleFCFMFromDefault(target, esc);
                 } break;
                 case Style::ColorMode::FullColor: {
                     if(cur._fg.FCFM._value.FC != target._fg.FCFM._value.FC) {
-                        esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createForegroundFullColor({
+                        esc.append(ControlSeq::Instruction::createForegroundFullColor({
                             ._r = target._fg.FCFM._value.FC._r,
                             ._g = target._fg.FCFM._value.FC._g,
                             ._b = target._fg.FCFM._value.FC._b,
-                        })));
+                        }));
                     }
                 } break;
                 case Style::ColorMode::Palette: {
-                    esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createForegroundColor(target._fg.FCFM._value.P)));
+                    esc.append(ControlSeq::Instruction::createForegroundColor(target._fg.FCFM._value.P));
                 } break;
             }
         } break;
         case Style::ColorMode::Palette: {
             switch(target._fg.FCFM._tag) {
                 case Style::ColorMode::Default: {
-                    esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createResetStyle()));
+                    esc.append(ControlSeq::Instruction::createResetStyle());
 
                     submitStyleFCFMFromDefault(target, esc);
                 } break;
                 case Style::ColorMode::FullColor: {
-                    esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createForegroundFullColor({
+                    esc.append(ControlSeq::Instruction::createForegroundFullColor({
                         ._r = target._fg.FCFM._value.FC._r,
                         ._g = target._fg.FCFM._value.FC._g,
                         ._b = target._fg.FCFM._value.FC._b,
-                    })));
+                    }));
                 } break;
                 case Style::ColorMode::Palette: {
                     if(cur._fg.FCFM._value.P == target._fg.FCFM._value.P) {
                         esc.append(
-                            ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createForegroundColor(target._fg.FCFM._value.P)));
+                            ControlSeq::Instruction::createForegroundColor(target._fg.FCFM._value.P));
                     }
                 } break;
             }
@@ -385,56 +385,56 @@ static void submitStyleFCFMToFCFM(const Style::Style& cur, const Style::Style& t
                 case Style::ColorMode::Default: {
                 } break;
                 case Style::ColorMode::FullColor: {
-                    esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createBackgroundFullColor({
+                    esc.append(ControlSeq::Instruction::createBackgroundFullColor({
                         ._r = target._bg.FCFM._value.FC._r,
                         ._g = target._bg.FCFM._value.FC._g,
                         ._b = target._bg.FCFM._value.FC._b,
-                    })));
+                    }));
                 } break;
                 case Style::ColorMode::Palette: {
-                    esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createBackgroundColor(target._bg.FCFM._value.P)));
+                    esc.append(ControlSeq::Instruction::createBackgroundColor(target._bg.FCFM._value.P));
                 } break;
             }
         } break;
         case Style::ColorMode::FullColor: {
             switch(target._bg.FCFM._tag) {
                 case Style::ColorMode::Default: {
-                    esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createResetStyle()));
+                    esc.append(ControlSeq::Instruction::createResetStyle());
 
                     submitStyleFCFMFromDefault(target, esc);
                 } break;
                 case Style::ColorMode::FullColor: {
                     if(cur._bg.FCFM._value.FC == target._bg.FCFM._value.FC) {
-                        esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createBackgroundFullColor({
+                        esc.append(ControlSeq::Instruction::createBackgroundFullColor({
                             ._r = target._bg.FCFM._value.FC._r,
                             ._g = target._bg.FCFM._value.FC._g,
                             ._b = target._bg.FCFM._value.FC._b,
-                        })));
+                        }));
                     }
                 } break;
                 case Style::ColorMode::Palette: {
-                    esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createBackgroundColor(target._bg.FCFM._value.P)));
+                    esc.append(ControlSeq::Instruction::createBackgroundColor(target._bg.FCFM._value.P));
                 } break;
             }
         } break;
         case Style::ColorMode::Palette: {
             switch(target._bg.FCFM._tag) {
                 case Style::ColorMode::Default: {
-                    esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createResetStyle()));
+                    esc.append(ControlSeq::Instruction::createResetStyle());
 
                     submitStyleFCFMFromDefault(target, esc);
                 } break;
                 case Style::ColorMode::FullColor: {
-                    esc.append(ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createBackgroundFullColor({
+                    esc.append(ControlSeq::Instruction::createBackgroundFullColor({
                         ._r = target._bg.FCFM._value.FC._r,
                         ._g = target._bg.FCFM._value.FC._g,
                         ._b = target._bg.FCFM._value.FC._b,
-                    })));
+                    }));
                 } break;
                 case Style::ColorMode::Palette: {
                     if(cur._bg.FCFM._value.P == target._bg.FCFM._value.P) {
                         esc.append(
-                            ControlSeq::Instruction::createStyle(ControlSeq::StyleInstruction::createBackgroundColor(target._bg.FCFM._value.P)));
+                            ControlSeq::Instruction::createBackgroundColor(target._bg.FCFM._value.P));
                     }
                 } break;
             }
@@ -569,10 +569,10 @@ static void submit(LinkedList<Instruction>& intermediate, ArrayList<ControlSeq::
                 submitSetCursor(params._pos, esc, state);
                 submitStyle(*params._style, esc, state);
 
-                esc.append(ControlSeq::Instruction::createInsert(ControlSeq::InsertInstrucion::createInsertString({
+                esc.append(ControlSeq::Instruction::createInsertString({
                     ._str = utf8,
                     ._len = utf8_str_len,
-                })));
+                }));
 
                 state._last_ch = params._ch;
                 state._pos._x += 1;
@@ -588,10 +588,10 @@ static void submit(LinkedList<Instruction>& intermediate, ArrayList<ControlSeq::
                 submitSetCursor(params._pos, esc, state);
                 submitStyle(*params._style, esc, state);
 
-                esc.append(ControlSeq::Instruction::createInsert(ControlSeq::InsertInstrucion::createInsertString({
+                esc.append(ControlSeq::Instruction::createInsertString({
                     ._str = utf8,
                     ._len = utf8_len,
-                })));
+                }));
 
                 state._last_ch = params._str[params._len - 1];
                 state._pos._x += params._len;
@@ -620,16 +620,16 @@ static void submit(LinkedList<Instruction>& intermediate, ArrayList<ControlSeq::
 
                     UTF8::encodeCodepoint(params._ch, utf8);
 
-                    esc.append(ControlSeq::Instruction::createInsert(ControlSeq::InsertInstrucion::createInsertString({
+                    esc.append(ControlSeq::Instruction::createInsertString({
                         ._str = utf8,
                         ._len = utf8_len,
-                    })));
+                    }));
 
                     state._last_ch = params._ch;
 
-                    esc.append(ControlSeq::Instruction::createInsert(ControlSeq::InsertInstrucion::createRepeatChar(params._n - 1)));
+                    esc.append(ControlSeq::Instruction::createRepeatChar(params._n - 1));
                 } else {
-                    esc.append(ControlSeq::Instruction::createInsert(ControlSeq::InsertInstrucion::createRepeatChar(params._n)));
+                    esc.append(ControlSeq::Instruction::createRepeatChar(params._n));
                 }
 
                 state._pos._x += params._n;

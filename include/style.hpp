@@ -28,9 +28,9 @@ static inline void setEnconding(uint64_t& style, const StyleEncoding encoding) {
 }
 
 enum class ColorMode {
-    Default = 0,     // Restores Back to the default color using ^[[0m
-    FullColor = 1,   // 24bit colors
-    Palette = 2,     // Palette colors
+    Default = 0,   // Restores Back to the default color using ^[[0m
+    FullColor = 1, // 24bit colors
+    Palette = 2,   // Palette colors
 };
 
 namespace FCFM {
@@ -118,7 +118,7 @@ static inline bool getBlinking(const uint64_t style) {
     return getBit(style, 59);
 }
 
-static inline bool getReverse(const uint64_t style) {
+static inline bool getReversed(const uint64_t style) {
     return getBit(style, 60);
 }
 
@@ -214,7 +214,7 @@ static inline void setBlinking(uint64_t& style, const bool value) {
     }
 }
 
-static inline void setReverse(uint64_t& style, const bool value) {
+static inline void setReversed(uint64_t& style, const bool value) {
     if(value) {
         setBit(style, 60);
     } else {
@@ -262,7 +262,7 @@ struct FCFMBgFC {
     uint8_t _b = 0;
     uint8_t _a = 127;
 
-    bool operator==(const FCFMBgFC& other) const{
+    bool operator==(const FCFMBgFC& other) const {
         return _r == other._r && _g == other._g && _b == other._b && _a == other._a;
     }
 };
@@ -286,7 +286,7 @@ struct FCFMMod {
     bool _italic = false;
     bool _underlined = false;
     bool _blinking = false;
-    bool _reverse = false;
+    bool _reversed = false;
     bool _strikethrough = false;
 };
 
@@ -357,7 +357,7 @@ struct Style {
                     ._italic = FCFM::getItalic(style),
                     ._underlined = FCFM::getUnderlined(style),
                     ._blinking = FCFM::getBlinking(style),
-                    ._reverse = FCFM::getReverse(style),
+                    ._reversed = FCFM::getReversed(style),
                     ._strikethrough = FCFM::getStrikethrough(style),
                 };
 
@@ -421,7 +421,7 @@ struct Style {
                 FCFM::setItalic(style, _mod.FCFM._italic);
                 FCFM::setUnderlined(style, _mod.FCFM._underlined);
                 FCFM::setBlinking(style, _mod.FCFM._blinking);
-                FCFM::setReverse(style, _mod.FCFM._reverse);
+                FCFM::setReversed(style, _mod.FCFM._reversed);
                 FCFM::setStrikethrough(style, _mod.FCFM._strikethrough);
             } break;
         }
@@ -549,7 +549,7 @@ struct Style {
     inline Style& reverse(const bool value = true) {
         switch(_tag) {
             case StyleEncoding::FCFM: {
-                _mod.FCFM._reverse = value;
+                _mod.FCFM._reversed = value;
             } break;
         }
 

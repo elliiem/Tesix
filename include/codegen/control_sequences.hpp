@@ -205,42 +205,6 @@ union CursorInstrParam {
 struct CursorInstruction {
     CursorInstrType _type;
     CursorInstrParam _params;
-
-    [[clang::always_inline]] static inline CursorInstruction createCursorUp(const size_t n) {
-        return {._type = CursorInstrType::CursorUp, ._params = {.CursorUp = n}};
-    }
-
-    [[clang::always_inline]] static inline CursorInstruction createCursorDown(const size_t n) {
-        return {._type = CursorInstrType::CursorDown, ._params = {.CursorDown = n}};
-    }
-
-    [[clang::always_inline]] static inline CursorInstruction createCursorLeft(const size_t n) {
-        return {._type = CursorInstrType::CursorLeft, ._params = {.CursorLeft = n}};
-    }
-
-    [[clang::always_inline]] static inline CursorInstruction createCursorRight(const size_t n) {
-        return {._type = CursorInstrType::CursorRight, ._params = {.CursorRight = n}};
-    }
-
-    [[clang::always_inline]] static inline CursorInstruction createCursorUpBegin(const size_t n) {
-        return {._type = CursorInstrType::CursorUpBegin, ._params = {.CursorUpBegin = n}};
-    }
-
-    [[clang::always_inline]] static inline CursorInstruction createCursorDownBegin(const size_t n) {
-        return {._type = CursorInstrType::CursorDownBegin, ._params = {.CursorDownBegin = n}};
-    }
-
-    [[clang::always_inline]] static inline CursorInstruction createCursorRow(const size_t row) {
-        return {._type = CursorInstrType::CursorRow, ._params = {.CursorRow = row}};
-    }
-
-    [[clang::always_inline]] static inline CursorInstruction createCursorColumn(const size_t column) {
-        return {._type = CursorInstrType::CursorColumn, ._params = {.CursorColumn = column}};
-    }
-
-    [[clang::always_inline]] static inline CursorInstruction createCursorTo(const CursorToParams& params) {
-        return {._type = CursorInstrType::CursorTo, ._params = {.CursorTo = params}};
-    }
 };
 
 #ifdef _DEBUG
@@ -382,26 +346,6 @@ union EraseInstrParam {
 struct EraseInstruction {
     EraseInstrType _type;
     EraseInstrParam _params;
-
-    [[clang::always_inline]] static inline EraseInstruction createEraseChars(const size_t n) {
-        return {._type = EraseInstrType::EraseChars, ._params = {.EraseChars = n}};
-    }
-
-    [[clang::always_inline]] static inline EraseInstruction createEraseLine(const EraseLine mode) {
-        return {._type = EraseInstrType::EraseLine, ._params = {.EraseLine = mode}};
-    }
-
-    [[clang::always_inline]] static inline EraseInstruction createEraseDisplay(const EraseDisplay mode) {
-        return {._type = EraseInstrType::EraseDisplay, ._params = {.EraseDisplay = mode}};
-    }
-
-    [[clang::always_inline]] static inline EraseInstruction createDeleteChars(const size_t n) {
-        return {._type = EraseInstrType::DeleteChars, ._params = {.DeleteChars = n}};
-    }
-
-    [[clang::always_inline]] static inline EraseInstruction createDeleteLines(const size_t n) {
-        return {._type = EraseInstrType::DeleteLines, ._params = {.DeleteLines = n}};
-    }
 };
 
 #ifdef _DEBUG
@@ -503,14 +447,6 @@ union PaletteInstrParam {
 struct PaletteInstruction {
     PaletteInstrType _type;
     PaletteInstrParam _params;
-
-    [[clang::always_inline]] static inline PaletteInstruction createSetPaletteColor(const SetPaletteColorParams& params) {
-        return {._type = PaletteInstrType::SetPaletteColor, ._params = {.SetPaletteColor = params}};
-    }
-
-    [[clang::always_inline]] static inline PaletteInstruction createResetPalette() {
-        return {._type = PaletteInstrType::ResetPalette};
-    }
 };
 
 #ifdef _DEBUG
@@ -544,7 +480,7 @@ static void submitPalette(const PaletteInstruction instr, T& buffer, const size_
 }
 
 enum class InsertInstrType {
-    InsertChars,
+    InsertChar,
     InsertString,
     BlankChars,
     BlankLines,
@@ -557,7 +493,7 @@ struct InsertStringParams {
 };
 
 union InsertInstrParam {
-    uint8_t InsertChars;
+    uint8_t InsertChar;
     InsertStringParams InsertString;
     size_t BlankChars;
     size_t BlankLines;
@@ -567,26 +503,6 @@ union InsertInstrParam {
 struct InsertInstrucion {
     InsertInstrType _type;
     InsertInstrParam _params;
-
-    [[clang::always_inline]] static inline InsertInstrucion createInsertChar(const uint8_t ch) {
-        return {._type = InsertInstrType::InsertChars, ._params = {.InsertChars = ch}};
-    }
-
-    [[clang::always_inline]] static inline InsertInstrucion createInsertString(const InsertStringParams& params) {
-        return {._type = InsertInstrType::InsertString, ._params = {.InsertString = params}};
-    }
-
-    [[clang::always_inline]] static inline InsertInstrucion createBlankChars(const size_t n) {
-        return {._type = InsertInstrType::BlankChars, ._params = {.BlankChars = n}};
-    }
-
-    [[clang::always_inline]] static inline InsertInstrucion createBlankLines(const size_t n) {
-        return {._type = InsertInstrType::BlankLines, ._params = {.BlankLines = n}};
-    }
-
-    [[clang::always_inline]] static inline InsertInstrucion createRepeatChar(const size_t n) {
-        return {._type = InsertInstrType::RepeatChar, ._params = {.RepeatChar = n}};
-    }
 };
 
 #ifdef _DEBUG
@@ -597,10 +513,10 @@ template<TypeArrayList<uint8_t> T>
 static void submitInsert(const InsertInstrucion instr, T& buffer, const size_t out_fd) {
 #endif
     switch(instr._type) {
-        case InsertInstrType::InsertChars: {
+        case InsertInstrType::InsertChar: {
             callEnsureSpace(1, buffer, out_fd, debug_out_fd);
 
-            buffer.appendAssume(instr._params.InsertChars);
+            buffer.appendAssume(instr._params.InsertChar);
         } break;
         case InsertInstrType::InsertString: {
             callEnsureSpace(instr._params.InsertString._len, buffer, out_fd, debug_out_fd);
@@ -642,7 +558,7 @@ enum class StyleInstrType {
     Italic,
     Underlined,
     Blinking,
-    Reverse,
+    Reversed,
     Strikethrough,
     ResetStyle,
     SaveStyle,
@@ -655,7 +571,7 @@ struct FullColorParams {
     uint8_t _b;
 };
 
-union StyleInstrParm {
+union StyleInstrParam {
     uint8_t ForegroundColor;
     FullColorParams ForegroundFullColor;
     uint8_t BackgroundColor;
@@ -664,65 +580,13 @@ union StyleInstrParm {
     bool Italic;
     bool Underlined;
     bool Blinking;
-    bool Reverse;
+    bool Reversed;
     bool Strikethrough;
 };
 
 struct StyleInstruction {
     StyleInstrType _type;
-    StyleInstrParm _params;
-
-    [[clang::always_inline]] static inline StyleInstruction createForegroundColor(const uint8_t value) {
-        return {._type = StyleInstrType::ForegroundColor, ._params = {.ForegroundColor = value}};
-    }
-
-    [[clang::always_inline]] static inline StyleInstruction createForegroundFullColor(const FullColorParams& params) {
-        return {._type = StyleInstrType::ForegroundFullColor, ._params = {.ForegroundFullColor = params}};
-    }
-
-    [[clang::always_inline]] static inline StyleInstruction createBackgroundColor(const uint8_t value) {
-        return {._type = StyleInstrType::BackgroundColor, ._params = {.BackgroundColor = value}};
-    }
-
-    [[clang::always_inline]] static inline StyleInstruction createBackgroundFullColor(const FullColorParams& params) {
-        return {._type = StyleInstrType::BackgroundFullColor, ._params = {.BackgroundFullColor = params}};
-    }
-
-    [[clang::always_inline]] static inline StyleInstruction createBold(bool value) {
-        return {._type = StyleInstrType::Bold, ._params = {.Bold = value}};
-    }
-
-    [[clang::always_inline]] static inline StyleInstruction createItalic(bool value) {
-        return {._type = StyleInstrType::Italic, ._params = {.Italic = value}};
-    }
-
-    [[clang::always_inline]] static inline StyleInstruction createUnderlined(bool value) {
-        return {._type = StyleInstrType::Underlined, ._params = {.Underlined = value}};
-    }
-
-    [[clang::always_inline]] static inline StyleInstruction createBlinking(bool value) {
-        return {._type = StyleInstrType::Blinking, ._params = {.Blinking = value}};
-    }
-
-    [[clang::always_inline]] static inline StyleInstruction createReversed(bool value) {
-        return {._type = StyleInstrType::Reverse, ._params = {.Reverse = value}};
-    }
-
-    [[clang::always_inline]] static inline StyleInstruction createStrikethrough(bool value) {
-        return {._type = StyleInstrType::Strikethrough, ._params = {.Strikethrough = value}};
-    }
-
-    [[clang::always_inline]] static inline StyleInstruction createResetStyle() {
-        return {._type = StyleInstrType::ResetStyle};
-    }
-
-    [[clang::always_inline]] static inline StyleInstruction createSaveStyle() {
-        return {._type = StyleInstrType::SaveStyle};
-    }
-
-    [[clang::always_inline]] static inline StyleInstruction createRestoreStyle() {
-        return {._type = StyleInstrType::RestoreStyle};
-    }
+    StyleInstrParam _params;
 };
 
 #ifdef _DEBUG
@@ -874,8 +738,8 @@ static inline void submitStyle(const StyleInstruction instr, T& buffer, const si
                 buffer.appendAssume(SGR);
             }
         } break;
-        case StyleInstrType::Reverse: {
-            if(instr._params.Reverse) {
+        case StyleInstrType::Reversed: {
+            if(instr._params.Reversed) {
                 callEnsureSpace(4, buffer, out_fd, debug_out_fd);
 
                 writeCSI(buffer);
@@ -958,28 +822,181 @@ struct Instruction {
     InstrType _type;
     InstrParameter _params;
 
-    [[clang::always_inline]] static inline Instruction createScrollingRegion(const SetScrollingRegionParams& params) {
+    static inline Instruction createReset() {
+        return {._type = InstrType::Reset};
+    }
+
+    static inline Instruction createTabstop() {
+        return {._type = InstrType::Tabstop};
+    }
+
+    static inline Instruction createScrollingRegion(const SetScrollingRegionParams& params) {
         return {._type = InstrType::SetScrollingRegion, ._params = {.SetScrollingRegion = params}};
     }
 
-    [[clang::always_inline]] static inline Instruction createCursor(const CursorInstruction& instr) {
-        return {._type = InstrType::Cursor, ._params = {.Cursor = instr}};
+    static inline Instruction createISOCharacterSet() {
+        return {._type = InstrType::ISOCharacterSet};
     }
 
-    [[clang::always_inline]] static inline Instruction createInsert(const InsertInstrucion& instr) {
-        return {._type = InstrType::Insert, ._params = {.Insert = instr}};
+    static inline Instruction createUTF8CharacterSet() {
+        return {._type = InstrType::UTF8CharacterSet};
     }
 
-    [[clang::always_inline]] static inline Instruction createErase(const EraseInstruction& instr) {
-        return {._type = InstrType::Erase, ._params = {.Erase = instr}};
+    static inline Instruction createLinefeed() {
+        return {._type = InstrType::Cursor, ._params = {.Cursor = {._type = CursorInstrType::Linefeed}}};
     }
 
-    [[clang::always_inline]] static inline Instruction createPalette(const PaletteInstruction& instr) {
-        return {._type = InstrType::Palette, ._params = {.Palette = instr}};
+    static inline Instruction createReverseLinefeed() {
+        return {._type = InstrType::Cursor, ._params = {.Cursor = {._type = CursorInstrType::ReverseLinefeed}}};
     }
 
-    [[clang::always_inline]] static inline Instruction createStyle(const StyleInstruction& instr) {
-        return {._type = InstrType::Style, ._params = {.Style = instr}};
+    static inline Instruction createNewline() {
+        return {._type = InstrType::Cursor, ._params = {.Cursor = {._type = CursorInstrType::Newline}}};
+    }
+
+    static inline Instruction createCursorUp(const size_t n) {
+        return {._type = InstrType::Cursor, ._params = {.Cursor = {._type = CursorInstrType::CursorUp, ._params = {.CursorUp = n}}}};
+    }
+
+    static inline Instruction createCursorDown(const size_t n) {
+        return {._type = InstrType::Cursor, ._params = {.Cursor = {._type = CursorInstrType::CursorDown, ._params = {.CursorDown = n}}}};
+    }
+
+    static inline Instruction createCursorLeft(const size_t n) {
+        return {._type = InstrType::Cursor, ._params = {.Cursor = {._type = CursorInstrType::CursorLeft, ._params = {.CursorLeft = n}}}};
+    }
+
+    static inline Instruction createCursorRight(const size_t n) {
+        return {._type = InstrType::Cursor, ._params = {.Cursor = {._type = CursorInstrType::CursorRight, ._params = {.CursorRight = n}}}};
+    }
+
+    static inline Instruction createCursorUpBegin(const size_t n) {
+        return {._type = InstrType::Cursor, ._params = {.Cursor = {._type = CursorInstrType::CursorUpBegin, ._params = {.CursorUpBegin = n}}}};
+    }
+
+    static inline Instruction createCursorDownBegin(const size_t n) {
+        return {._type = InstrType::Cursor, ._params = {.Cursor = {._type = CursorInstrType::CursorDownBegin, ._params = {.CursorDownBegin = n}}}};
+    }
+
+    static inline Instruction createCursorRow(const size_t row) {
+        return {._type = InstrType::Cursor, ._params = {.Cursor = {._type = CursorInstrType::CursorRow, ._params = {.CursorRow = row}}}};
+    }
+
+    static inline Instruction createCursorColumn(const size_t column) {
+        return {._type = InstrType::Cursor, ._params = {.Cursor = {._type = CursorInstrType::CursorColumn, ._params = {.CursorColumn = column}}}};
+    }
+
+    static inline Instruction createCursorTo(const CursorToParams& params) {
+        return {._type = InstrType::Cursor, ._params = {.Cursor = {._type = CursorInstrType::CursorTo, ._params = {.CursorTo = params}}}};
+    }
+
+    static inline Instruction createSaveCursor() {
+        return {._type = InstrType::Cursor, ._params = {.Cursor = {._type = CursorInstrType::SaveCursor}}};
+    }
+
+    static inline Instruction createRestoreCursor() {
+        return {._type = InstrType::Cursor, ._params = {.Cursor = {._type = CursorInstrType::RestoreCursor}}};
+    }
+
+    static inline Instruction createEraseChars(const size_t n) {
+        return {._type = InstrType::Erase, ._params = {.Erase = {._type = EraseInstrType::EraseChars, ._params = {.EraseChars = n}}}};
+    }
+
+    static inline Instruction createEraseLine(const EraseLine type) {
+        return {._type = InstrType::Erase, ._params = {.Erase = {._type = EraseInstrType::EraseLine, ._params = {.EraseLine = type}}}};
+    }
+
+    static inline Instruction createEraseDisplay(const EraseDisplay type) {
+        return {._type = InstrType::Erase, ._params = {.Erase = {._type = EraseInstrType::EraseDisplay, ._params = {.EraseDisplay = type}}}};
+    }
+
+    static inline Instruction createDeleteChars(const size_t n) {
+        return {._type = InstrType::Erase, ._params = {.Erase = {._type = EraseInstrType::DeleteChars, ._params = {.DeleteChars = n}}}};
+    }
+
+    static inline Instruction createDeleteLines(const size_t n) {
+        return {._type = InstrType::Erase, ._params = {.Erase = {._type = EraseInstrType::DeleteLines, ._params = {.DeleteLines = n}}}};
+    }
+
+    static inline Instruction createSetPaletteColor(const SetPaletteColorParams& params) {
+        return {._type = InstrType::Palette,
+            ._params = {.Palette = {._type = PaletteInstrType::SetPaletteColor, ._params = {.SetPaletteColor = params}}}};
+    }
+
+    static inline Instruction createResetPalette() {
+        return {._type = InstrType::Palette, ._params = {.Palette = {._type = PaletteInstrType::ResetPalette}}};
+    }
+
+    static inline Instruction createInsertChar(const uint8_t ch) {
+        return {._type = InstrType::Insert, ._params = {.Insert = {._type = InsertInstrType::InsertChar, ._params = {.InsertChar = ch}}}};
+    }
+
+    static inline Instruction createInsertString(const InsertStringParams& params) {
+        return {._type = InstrType::Insert, ._params = {.Insert = {._type = InsertInstrType::InsertString, ._params = {.InsertString = params}}}};
+    }
+
+    static inline Instruction createBlankChars(const uintmax_t n) {
+        return {._type = InstrType::Insert, ._params = {.Insert = {._type = InsertInstrType::BlankChars, ._params = {.BlankChars = n}}}};
+    }
+
+    static inline Instruction createBlankLines(const uintmax_t n) {
+        return {._type = InstrType::Insert, ._params = {.Insert = {._type = InsertInstrType::BlankLines, ._params = {.BlankLines = n}}}};
+    }
+
+    static inline Instruction createRepeatChar(const uintmax_t n) {
+        return {._type = InstrType::Insert, ._params = {.Insert = {._type = InsertInstrType::RepeatChar, ._params = {.RepeatChar = n}}}};
+    }
+
+    static inline Instruction createForegroundColor(const uint8_t color) {
+        return {._type = InstrType::Style, ._params = {.Style = {._type = StyleInstrType::ForegroundColor, ._params = {.ForegroundColor = color}}}};
+    }
+
+    static inline Instruction createForegroundFullColor(const FullColorParams& params) {
+        return {._type = InstrType::Style, ._params = {.Style = {._type = StyleInstrType::ForegroundFullColor, ._params = {.ForegroundFullColor = params}}}};
+    }
+
+    static inline Instruction createBackgroundColor(const uint8_t color) {
+        return {._type = InstrType::Style, ._params = {.Style = {._type = StyleInstrType::BackgroundColor, ._params = {.BackgroundColor = color}}}};
+    }
+
+    static inline Instruction createBackgroundFullColor(const FullColorParams& params) {
+        return {._type = InstrType::Style, ._params = {.Style = {._type = StyleInstrType::BackgroundFullColor, ._params = {.BackgroundFullColor = params}}}};
+    }
+
+    static inline Instruction createBold(const bool boolean) {
+        return {._type = InstrType::Style, ._params = {.Style = {._type = StyleInstrType::Bold, ._params = {.Bold = boolean}}}};
+    }
+
+    static inline Instruction createItalic(const bool boolean) {
+        return {._type = InstrType::Style, ._params = {.Style = {._type = StyleInstrType::Italic, ._params = {.Italic = boolean}}}};
+    }
+
+    static inline Instruction createUnderlined(const bool boolean) {
+        return {._type = InstrType::Style, ._params = {.Style = {._type = StyleInstrType::Underlined, ._params = {.Underlined = boolean}}}};
+    }
+
+    static inline Instruction createBlinking(const bool boolean) {
+        return {._type = InstrType::Style, ._params = {.Style = {._type = StyleInstrType::Blinking, ._params = {.Blinking = boolean}}}};
+    }
+
+    static inline Instruction createReversed(const bool boolean) {
+        return {._type = InstrType::Style, ._params = {.Style = {._type = StyleInstrType::Reversed, ._params = {.Reversed = boolean}}}};
+    }
+
+    static inline Instruction createStrikethrough(const bool boolean) {
+        return {._type = InstrType::Style, ._params = {.Style = {._type = StyleInstrType::Strikethrough, ._params = {.Strikethrough = boolean}}}};
+    }
+
+    static inline Instruction createResetStyle() {
+        return {._type = InstrType::Style, ._params = {.Style = {._type = StyleInstrType::ResetStyle}}};
+    }
+
+    static inline Instruction createSaveStyle() {
+        return {._type = InstrType::Style, ._params = {.Style = {._type = StyleInstrType::SaveStyle}}};
+    }
+
+    static inline Instruction createRestoreStyle() {
+        return {._type = InstrType::Style, ._params = {.Style = {._type = StyleInstrType::RestoreStyle}}};
     }
 };
 

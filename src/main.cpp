@@ -35,8 +35,8 @@ int main() {
 
     ArrayList<Tesix::ControlSeq::Instruction, Dynamic> esc(5);
     esc.append(
-        Tesix::ControlSeq::Instruction::createErase(Tesix::ControlSeq::EraseInstruction::createEraseDisplay(Tesix::ControlSeq::EraseDisplay::All)));
-    esc.append(Tesix::ControlSeq::Instruction::createCursor(Tesix::ControlSeq::CursorInstruction::createCursorTo({._row = 1, ._column = 1})));
+        Tesix::ControlSeq::Instruction::createEraseDisplay(Tesix::ControlSeq::EraseDisplay::All));
+    esc.append(Tesix::ControlSeq::Instruction::createCursorTo({._row = 1, ._column = 1}));
 
     uint64_t initial_style = Tesix::Style::Style{}.fgDefault().bgDefault().construct();
 
@@ -64,8 +64,8 @@ int main() {
 
     Tesix::Intermediary::submit(intermediary, esc, state);
 
-    esc.append(Tesix::ControlSeq::Instruction::createStyle(Tesix::ControlSeq::StyleInstruction::createResetStyle()));
-    esc.append(Tesix::ControlSeq::Instruction::createCursor(Tesix::ControlSeq::CursorInstruction::createCursorTo({._row = 1, ._column = 90})));
+    esc.append(Tesix::ControlSeq::Instruction::createResetStyle());
+    esc.append(Tesix::ControlSeq::Instruction::createCursorTo({._row = 1, ._column = 90}));
 
     ArrayList<uint8_t, Dynamic> out(128);
 
