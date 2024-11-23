@@ -1,5 +1,6 @@
 #include "box.hpp"
 #include "buffer.hpp"
+#include "style.hpp"
 
 #include <cstdint>
 #include <sys/ioctl.h>
@@ -15,7 +16,7 @@ inline Buffer2D<uint32_t> createScreenBuffer() {
 
 struct State {
     Position _pos;
-    const uint64_t* _style;
+    StyleContainer _style;
     uint32_t _last_ch;
     Buffer2D<uint32_t> _screen_buffer;
 };

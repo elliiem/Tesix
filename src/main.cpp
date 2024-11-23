@@ -30,19 +30,17 @@ void printBits(size_t const size, void const* const ptr) {
 }
 
 int main() {
-
     enableRawMode();
 
     ArrayList<Tesix::ControlSeq::Instruction, Dynamic> esc(5);
-    esc.append(
-        Tesix::ControlSeq::Instruction::createEraseDisplay(Tesix::ControlSeq::EraseDisplay::All));
+    esc.append(Tesix::ControlSeq::Instruction::createEraseDisplay(Tesix::ControlSeq::EraseDisplay::All));
     esc.append(Tesix::ControlSeq::Instruction::createCursorTo({._row = 1, ._column = 1}));
 
-    uint64_t initial_style = Tesix::Style::Style{}.fgDefault().bgDefault().construct();
+    uint64_t initial_style = Tesix::Style::Style {}.fgDefault().bgDefault().toEncoding();
 
     Tesix::State state = {
-        ._pos = {0,0},
-        ._style = &initial_style,
+        ._pos = {0, 0},
+        ._style = Tesix::StyleContainer::createPtr(&initial_style),
         ._last_ch = 0,
         ._screen_buffer = Tesix::createScreenBuffer(),
     };
@@ -51,13 +49,16 @@ int main() {
     intermediary.init();
 
     uint32_t str[5] = {'x', 'x', 'x', 'x', 'x'};
-    uint64_t str_style = Tesix::Style::Style{}.fgFC({._r = 255, ._g = 50, ._b = 150}).bgP(0).bold().construct();
+    uint64_t mod_style = Tesix::Style::Style{}.bgFullColor({._r = 255, ._g = 0, ._b = 0, ._a = 15}).toEncoding();
+    uint64_t str_style = Tesix::Style::Style{}.fgPalette(1).bgFullColor({._r = 0, ._g = 0, ._b = 255, ._a = 12}).bold().toEncoding();
+
+    uint64_t modified_style = Tesix::Intermediary::applyColorModifier(str_style, mod_style);
 
     intermediary.append(Tesix::Intermediary::Instruction::createInsertString({
         ._pos = {10, 10},
         ._str = str,
         ._len = 5,
-        ._style = &str_style,
+        ._style = Tesix::StyleContainer::createPtr(&modified_style)
     }));
 
     Tesix::Intermediary::optGlobString(intermediary, intermediary.first());

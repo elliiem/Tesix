@@ -9,6 +9,7 @@
 #include "control_sequences.hpp"
 
 #include <cassert>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -35,26 +36,26 @@ enum class InstrType {
     ClearLineBw,
     ClearArea,
     RestoreArea,
-    ColorModifier,
 };
+
 
 struct InsertCharParams {
     Position _pos;
     uint32_t _ch;
-    const uint64_t* _style;
+    StyleContainer _style;
 };
 
 struct InsertStringParams {
     Position _pos;
     uint32_t* _str;
     size_t _len;
-    const uint64_t* _style;
+    StyleContainer _style;
 };
 
 struct FillAreaParams {
     FloatingBox _area;
     uint32_t _ch;
-    const uint64_t* _style;
+    StyleContainer _style;
 };
 
 struct MoveAreaParams {
@@ -64,14 +65,14 @@ struct MoveAreaParams {
 
 struct ClearAreaParams {
     FloatingBox _area;
-    const uint64_t* _style;
+    StyleContainer _style;
 };
 
 struct RepeatParams {
     Position _pos;
     uint32_t _ch;
     size_t _n;
-    const uint64_t* _style;
+    StyleContainer _style;
 };
 
 struct DrawBufferParams {
@@ -328,10 +329,10 @@ static void submitStyleFCFMToFCFM(const Style::Style& cur, const Style::Style& t
                         ._g = target._fg.FCFM._value.FC._g,
                         ._b = target._fg.FCFM._value.FC._b,
                     }));
-                }
+                } break;
                 case Style::ColorMode::Palette: {
                     esc.append(ControlSeq::Instruction::createForegroundColor(target._fg.FCFM._value.P));
-                }
+                } break;
             }
         } break;
         case Style::ColorMode::FullColor: {
@@ -371,8 +372,7 @@ static void submitStyleFCFMToFCFM(const Style::Style& cur, const Style::Style& t
                 } break;
                 case Style::ColorMode::Palette: {
                     if(cur._fg.FCFM._value.P == target._fg.FCFM._value.P) {
-                        esc.append(
-                            ControlSeq::Instruction::createForegroundColor(target._fg.FCFM._value.P));
+                        esc.append(ControlSeq::Instruction::createForegroundColor(target._fg.FCFM._value.P));
                     }
                 } break;
             }
@@ -433,19 +433,51 @@ static void submitStyleFCFMToFCFM(const Style::Style& cur, const Style::Style& t
                 } break;
                 case Style::ColorMode::Palette: {
                     if(cur._bg.FCFM._value.P == target._bg.FCFM._value.P) {
-                        esc.append(
-                            ControlSeq::Instruction::createBackgroundColor(target._bg.FCFM._value.P));
+                        esc.append(ControlSeq::Instruction::createBackgroundColor(target._bg.FCFM._value.P));
                     }
                 } break;
             }
         } break;
     }
+
+    if(cur._mod.FCFM._bold != target._mod.FCFM._bold) {
+        esc.append(ControlSeq::Instruction::createBold(target._mod.FCFM._bold));
+    }
+
+    if(cur._mod.FCFM._italic != target._mod.FCFM._italic) {
+        esc.append(ControlSeq::Instruction::createItalic(target._mod.FCFM._italic));
+    }
+
+    if(cur._mod.FCFM._underlined != target._mod.FCFM._underlined) {
+        esc.append(ControlSeq::Instruction::createUnderlined(target._mod.FCFM._underlined));
+    }
+
+    if(cur._mod.FCFM._blinking != target._mod.FCFM._blinking) {
+        esc.append(ControlSeq::Instruction::createBlinking(target._mod.FCFM._blinking));
+    }
+
+    if(cur._mod.FCFM._reversed != target._mod.FCFM._reversed) {
+        esc.append(ControlSeq::Instruction::createReversed(target._mod.FCFM._reversed));
+    }
+
+    if(cur._mod.FCFM._strikethrough != target._mod.FCFM._strikethrough) {
+        esc.append(ControlSeq::Instruction::createStrikethrough(target._mod.FCFM._strikethrough));
+    }
 }
 
 static void submitStyle(uint64_t target_enc, ArrayList<ControlSeq::Instruction, Dynamic>& esc, State& state) {
-    assert(state._style != nullptr);
+    Style::Style cur;
 
-    const auto cur = Style::Style::fromEncoding(*state._style);
+    switch(state._style._tag) {
+        case StyleContainerTag::Ptr: {
+            assert(state._style._value.P != nullptr);
+
+            cur = Style::Style::fromEncoding(*state._style._value.P);
+        } break;
+        case StyleContainerTag::Value: {
+            cur = Style::Style::fromEncoding(state._style._value.V);
+        }
+    }
     const auto target = Style::Style::fromEncoding(target_enc);
 
     switch(cur._tag) {
@@ -456,6 +488,43 @@ static void submitStyle(uint64_t target_enc, ArrayList<ControlSeq::Instruction, 
                 } break;
             }
         } break;
+    }
+}
+
+static uint64_t applyColorModifier(uint64_t style_enc, uint64_t mod_enc) {
+    const auto style = Style::Style::fromEncoding(style_enc);
+    const auto mod = Style::Style::fromEncoding(mod_enc);
+
+    switch(style._tag) {
+        case Style::StyleEncoding::FCFM: {
+            switch(mod._tag) {
+                case Style::StyleEncoding::FCFM: {
+                    assert(style._bg.FCFM._tag == Style::ColorMode::FullColor);
+                    assert(mod._bg.FCFM._tag == Style::ColorMode::FullColor);
+
+                    auto modified = style;
+
+                    const float alpha = static_cast<double_t>(style._bg.FCFM._value.FC._a) / 15.0;
+
+                    const uint8_t style_bg_part_r = static_cast<uint8_t>(style._bg.FCFM._value.FC._r * alpha);
+                    const uint8_t style_bg_part_g = static_cast<uint8_t>(style._bg.FCFM._value.FC._g * alpha);
+                    const uint8_t style_bg_part_b = static_cast<uint8_t>(style._bg.FCFM._value.FC._b * alpha);
+
+                    const uint8_t mod_bg_part_r = static_cast<uint8_t>(mod._bg.FCFM._value.FC._r * (1 - alpha));
+                    const uint8_t mod_bg_part_g = static_cast<uint8_t>(mod._bg.FCFM._value.FC._g * (1 - alpha));
+                    const uint8_t mod_bg_part_b = static_cast<uint8_t>(mod._bg.FCFM._value.FC._b * (1 - alpha));
+
+                    modified.bgFullColor({
+                        ._r = static_cast<uint8_t>(style_bg_part_r + mod_bg_part_r),
+                        ._g = static_cast<uint8_t>(style_bg_part_g + mod_bg_part_g),
+                        ._b = static_cast<uint8_t>(style_bg_part_b + mod_bg_part_b),
+                        ._a = 15,
+                    });
+
+                    return modified.toEncoding();
+                }
+            }
+        }
     }
 }
 
@@ -504,7 +573,7 @@ static Nodes<Instruction> expand(InstrNode instr_node, InstrList& intermediate) 
                             ._pos = {params._pos._x + cur_style_start, params._pos._y + y},
                             ._str = params._contents._parent->_buffer + params._contents.index(cur_style_start, y),
                             ._len = x - cur_style_start,
-                            ._style = cur_style,
+                            ._style = StyleContainer::createPtr(cur_style),
                         }));
 
                         cur_style_start = x;
@@ -516,7 +585,7 @@ static Nodes<Instruction> expand(InstrNode instr_node, InstrList& intermediate) 
                     ._pos = {params._pos._x + cur_style_start, params._pos._y + y},
                     ._str = params._contents._parent->_buffer + params._contents.index(cur_style_start, y),
                     ._len = params._contents._area._box._width - 1 - cur_style_start,
-                    ._style = cur_style,
+                    ._style = StyleContainer::createPtr(cur_style),
                 }));
             }
 
@@ -567,7 +636,7 @@ static void submit(LinkedList<Instruction>& intermediate, ArrayList<ControlSeq::
                 UTF8::encodeCodepoint(params._ch, utf8);
 
                 submitSetCursor(params._pos, esc, state);
-                submitStyle(*params._style, esc, state);
+                submitStyle(params._style.value(), esc, state);
 
                 esc.append(ControlSeq::Instruction::createInsertString({
                     ._str = utf8,
@@ -586,7 +655,7 @@ static void submit(LinkedList<Instruction>& intermediate, ArrayList<ControlSeq::
                 UTF8::encodeCodepointStr(params._str, params._len, utf8);
 
                 submitSetCursor(params._pos, esc, state);
-                submitStyle(*params._style, esc, state);
+                submitStyle(params._style.value(), esc, state);
 
                 esc.append(ControlSeq::Instruction::createInsertString({
                     ._str = utf8,
@@ -612,7 +681,7 @@ static void submit(LinkedList<Instruction>& intermediate, ArrayList<ControlSeq::
                 const RepeatParams params = instr._params.Repeat;
 
                 submitSetCursor(params._pos, esc, state);
-                submitStyle(*params._style, esc, state);
+                submitStyle(params._style.value(), esc, state);
 
                 if(state._last_ch != params._ch) {
                     const size_t utf8_len = UTF8::codepointLen(params._ch);

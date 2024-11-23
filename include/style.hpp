@@ -35,14 +35,6 @@ enum class ColorMode {
 
 namespace FCFM {
 
-static inline ColorMode getFgMode(const uint64_t style) {
-    return static_cast<ColorMode>(getBits(style, Range::fromFor(24, 2)));
-}
-
-static inline uint8_t getPFg(const uint64_t style) {
-    return getBits(style, Range::fromFor(0, 4));
-}
-
 static inline uint8_t getFCR(const uint32_t color) {
     return getBits(color, Range::fromFor(0, 8));
 }
@@ -58,6 +50,31 @@ static inline uint8_t getFCB(const uint32_t color) {
 static inline uint8_t getFCA(const uint32_t color) {
     return getBits(color, Range::fromFor(24, 4));
 }
+
+static inline void setFCR(uint32_t& color, const uint8_t value) {
+    setBitRangeTo(color, value, Range::fromFor(0, 8));
+}
+
+static inline void setFCG(uint32_t& color, const uint8_t value) {
+    setBitRangeTo(color, value, Range::fromFor(8, 8));
+}
+
+static inline void setFCB(uint32_t& color, const uint8_t value) {
+    setBitRangeTo(color, value, Range::fromFor(16, 8));
+}
+
+static inline void setFCA(uint32_t& color, const uint8_t value) {
+    setBitRangeTo(color, value, Range::fromFor(14, 4));
+}
+
+static inline ColorMode getFgMode(const uint64_t style) {
+    return static_cast<ColorMode>(getBits(style, Range::fromFor(24, 2)));
+}
+
+static inline uint8_t getPFg(const uint64_t style) {
+    return getBits(style, Range::fromFor(0, 4));
+}
+
 static inline uint32_t getFCFg(const uint64_t style) {
     return getBits(style, Range::fromFor(0, 24));
 }
@@ -248,12 +265,12 @@ union FCFMFgUnion {
 };
 
 struct FCFMFg {
-    ColorMode _tag;
+    ColorMode _tag = ColorMode::Default;
     FCFMFgUnion _value;
 };
 
 union Fg {
-    FCFMFg FCFM;
+    FCFMFg FCFM = {};
 };
 
 struct FCFMBgFC {
@@ -273,12 +290,12 @@ union FCFMBgUnion {
 };
 
 struct FCFMBg {
-    ColorMode _tag;
+    ColorMode _tag = ColorMode::Default;
     FCFMBgUnion _value;
 };
 
 union Bg {
-    FCFMBg FCFM;
+    FCFMBg FCFM = {};
 };
 
 struct FCFMMod {
@@ -291,7 +308,7 @@ struct FCFMMod {
 };
 
 union Mod {
-    FCFMMod FCFM;
+    FCFMMod FCFM = {};
 };
 
 struct FullColor {
@@ -373,7 +390,7 @@ struct Style {
         return {};
     }
 
-    inline uint64_t construct() {
+    inline uint64_t toEncoding() {
         uint64_t style = 0;
 
         switch(_tag) {
@@ -434,7 +451,7 @@ struct Style {
         return *this;
     }
 
-    inline Style& fgFC(const FullColor& value) {
+    inline Style& fgFullColor(const FullColor& value) {
         switch(_tag) {
             case StyleEncoding::FCFM: {
                 _fg.FCFM._tag = ColorMode::FullColor;
@@ -448,7 +465,7 @@ struct Style {
         return *this;
     }
 
-    inline Style& fgP(const uint8_t value) {
+    inline Style& fgPalette(const uint8_t value) {
         switch(_tag) {
             case StyleEncoding::FCFM: {
                 _fg.FCFM._tag = ColorMode::Palette;
@@ -470,7 +487,7 @@ struct Style {
         return *this;
     }
 
-    inline Style& bgFC(const FullColor& value) {
+    inline Style& bgFullColor(const FullColor& value) {
         switch(_tag) {
             case StyleEncoding::FCFM: {
                 _bg.FCFM._tag = ColorMode::FullColor;
@@ -485,7 +502,7 @@ struct Style {
         return *this;
     }
 
-    inline Style& bgP(const uint8_t value) {
+    inline Style& bgPalette(const uint8_t value) {
         switch(_tag) {
             case StyleEncoding::FCFM: {
                 _bg.FCFM._tag = ColorMode::Palette;
@@ -568,5 +585,40 @@ struct Style {
 };
 
 } // namespace Style
+
+enum class StyleContainerTag {
+    Value,
+    Ptr,
+};
+
+union StyleContainerU {
+    uint64_t V;
+    const uint64_t* P;
+};
+
+struct StyleContainer {
+    StyleContainerTag _tag;
+    StyleContainerU _value;
+
+    static inline StyleContainer createPtr(const uint64_t* style) {
+        return {._tag = StyleContainerTag::Ptr, ._value = {.P = style}};
+    }
+
+    static inline StyleContainer createValue(const uint64_t style) {
+        return {._tag = StyleContainerTag::Value, ._value = {.V = style}};
+    }
+
+    inline uint64_t value() const {
+        switch(_tag) {
+            case StyleContainerTag::Ptr: {
+                return *_value.P;
+            } break;
+            case StyleContainerTag::Value: {
+                return _value.V;
+            } break;
+        }
+    }
+};
+
 
 } // namespace Tesix
