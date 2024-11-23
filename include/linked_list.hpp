@@ -19,6 +19,8 @@ struct Node {
     T _value;
 };
 
+
+//  TODO: support empty
 template<typename T>
 struct Nodes {
     Node<T>* _front;

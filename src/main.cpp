@@ -48,20 +48,26 @@ int main() {
     Tesix::LinkedList<Tesix::Intermediary::Instruction> intermediary;
     intermediary.init();
 
-    uint32_t str[5] = {'x', 'x', 'x', 'x', 'x'};
-    uint64_t mod_style = Tesix::Style::Style{}.bgFullColor({._r = 255, ._g = 0, ._b = 0, ._a = 15}).toEncoding();
-    uint64_t str_style = Tesix::Style::Style{}.fgPalette(1).bgFullColor({._r = 0, ._g = 0, ._b = 255, ._a = 12}).bold().toEncoding();
+    uint32_t a_str[5] = {'x', 'x', 'x', 'x', 'x'};
+    uint64_t a_style = Tesix::Style::Style {}.bgFullColor({._r = 255, ._g = 0, ._b = 0, ._a = 13}).toEncoding();
+    uint32_t b_str[3] = {'a', 'a', 'a'};
+    uint64_t b_style = Tesix::Style::Style {}.fgPalette(1).bgFullColor({._r = 0, ._g = 0, ._b = 255, ._a = 15}).bold().toEncoding();
 
-    uint64_t modified_style = Tesix::Intermediary::applyColorModifier(str_style, mod_style);
+    intermediary.append(Tesix::Intermediary::Instruction::createInsertString({
+        ._pos = {12, 10},
+        ._str = a_str,
+        ._len = 5,
+        ._style = Tesix::StyleContainer::createPtr(&a_style),
+    }));
 
     intermediary.append(Tesix::Intermediary::Instruction::createInsertString({
         ._pos = {10, 10},
-        ._str = str,
-        ._len = 5,
-        ._style = Tesix::StyleContainer::createPtr(&modified_style)
+        ._str = b_str,
+        ._len = 3,
+        ._style = Tesix::StyleContainer::createPtr(&b_style),
     }));
 
-    Tesix::Intermediary::optGlobString(intermediary, intermediary.first());
+    Tesix::Intermediary::resolveStringOnStringOverdraw(intermediary.first(), intermediary.first()->_next, intermediary);
 
     Tesix::Intermediary::submit(intermediary, esc, state);
 

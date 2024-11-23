@@ -38,7 +38,6 @@ enum class InstrType {
     RestoreArea,
 };
 
-
 struct InsertCharParams {
     Position _pos;
     uint32_t _ch;
@@ -491,43 +490,6 @@ static void submitStyle(uint64_t target_enc, ArrayList<ControlSeq::Instruction, 
     }
 }
 
-static uint64_t applyColorModifier(uint64_t style_enc, uint64_t mod_enc) {
-    const auto style = Style::Style::fromEncoding(style_enc);
-    const auto mod = Style::Style::fromEncoding(mod_enc);
-
-    switch(style._tag) {
-        case Style::StyleEncoding::FCFM: {
-            switch(mod._tag) {
-                case Style::StyleEncoding::FCFM: {
-                    assert(style._bg.FCFM._tag == Style::ColorMode::FullColor);
-                    assert(mod._bg.FCFM._tag == Style::ColorMode::FullColor);
-
-                    auto modified = style;
-
-                    const float alpha = static_cast<double_t>(style._bg.FCFM._value.FC._a) / 15.0;
-
-                    const uint8_t style_bg_part_r = static_cast<uint8_t>(style._bg.FCFM._value.FC._r * alpha);
-                    const uint8_t style_bg_part_g = static_cast<uint8_t>(style._bg.FCFM._value.FC._g * alpha);
-                    const uint8_t style_bg_part_b = static_cast<uint8_t>(style._bg.FCFM._value.FC._b * alpha);
-
-                    const uint8_t mod_bg_part_r = static_cast<uint8_t>(mod._bg.FCFM._value.FC._r * (1 - alpha));
-                    const uint8_t mod_bg_part_g = static_cast<uint8_t>(mod._bg.FCFM._value.FC._g * (1 - alpha));
-                    const uint8_t mod_bg_part_b = static_cast<uint8_t>(mod._bg.FCFM._value.FC._b * (1 - alpha));
-
-                    modified.bgFullColor({
-                        ._r = static_cast<uint8_t>(style_bg_part_r + mod_bg_part_r),
-                        ._g = static_cast<uint8_t>(style_bg_part_g + mod_bg_part_g),
-                        ._b = static_cast<uint8_t>(style_bg_part_b + mod_bg_part_b),
-                        ._a = 15,
-                    });
-
-                    return modified.toEncoding();
-                }
-            }
-        }
-    }
-}
-
 static Nodes<Instruction> expand(InstrNode instr_node, InstrList& intermediate) {
     auto& instr = instr_node->_value;
 
@@ -615,6 +577,192 @@ static Nodes<Instruction> expand(InstrNode instr_node, InstrList& intermediate) 
             return items;
         } break;
     }
+}
+
+static uint64_t applyColorModifier(uint64_t style_enc, uint64_t mod_enc) {
+    const auto style = Style::Style::fromEncoding(style_enc);
+    const auto mod = Style::Style::fromEncoding(mod_enc);
+
+    switch(style._tag) {
+        case Style::StyleEncoding::FCFM: {
+            switch(mod._tag) {
+                case Style::StyleEncoding::FCFM: {
+                    assert(style._bg.FCFM._tag == Style::ColorMode::FullColor);
+                    assert(mod._bg.FCFM._tag == Style::ColorMode::FullColor);
+
+                    auto modified = style;
+
+                    const float alpha = static_cast<double_t>(style._bg.FCFM._value.FC._a) / 15.0;
+
+                    const uint8_t style_bg_part_r = static_cast<uint8_t>(style._bg.FCFM._value.FC._r * alpha);
+                    const uint8_t style_bg_part_g = static_cast<uint8_t>(style._bg.FCFM._value.FC._g * alpha);
+                    const uint8_t style_bg_part_b = static_cast<uint8_t>(style._bg.FCFM._value.FC._b * alpha);
+
+                    const uint8_t mod_bg_part_r = static_cast<uint8_t>(mod._bg.FCFM._value.FC._r * (1 - alpha));
+                    const uint8_t mod_bg_part_g = static_cast<uint8_t>(mod._bg.FCFM._value.FC._g * (1 - alpha));
+                    const uint8_t mod_bg_part_b = static_cast<uint8_t>(mod._bg.FCFM._value.FC._b * (1 - alpha));
+
+                    modified.bgFullColor({
+                        ._r = static_cast<uint8_t>(style_bg_part_r + mod_bg_part_r),
+                        ._g = static_cast<uint8_t>(style_bg_part_g + mod_bg_part_g),
+                        ._b = static_cast<uint8_t>(style_bg_part_b + mod_bg_part_b),
+                        ._a = 15,
+                    });
+
+                    return modified.toEncoding();
+                }
+            }
+        }
+    }
+}
+
+static FloatingBox insertStringArea(const InsertStringParams& params) {
+    return {._pos = params._pos, ._box = {._width = params._len, ._height = 1}};
+}
+
+static void resolveStringOnStringOverdraw(InstrNode top_node, InstrNode bottom_node, InstrList& instrs) {
+    const auto& top_instr = top_node->_value;
+    assert(top_instr._type == InstrType::InsertString);
+    const auto& top_params = top_instr._params.InsertString;
+
+    const auto& bottom_instr = bottom_node->_value;
+    assert(bottom_instr._type == InstrType::InsertString);
+    const auto& bottom_params = bottom_instr._params.InsertString;
+
+    assert(overlap(insertStringArea(top_params), insertStringArea(bottom_params)));
+
+    InstrList top_instrs;
+    top_instrs.init();
+
+    InstrList bottom_instrs;
+    bottom_instrs.init();
+
+    const auto top_style = Style::Style::fromEncoding(top_params._style.value());
+
+    const uintmax_t top_end = top_params._pos._x + top_params._len;
+    const uintmax_t bottom_end = bottom_params._pos._x + bottom_params._len;
+
+    switch(top_style._tag) {
+        case Style::StyleEncoding::FCFM: {
+            if(top_style._bg.FCFM._tag == Style::ColorMode::FullColor && top_style._bg.FCFM._value.FC._a < 15) {
+                if(top_params._pos._x < bottom_params._pos._x) {
+                    if(top_end > bottom_end) {
+                        top_instrs.append(Instruction::createInsertString({
+                            ._pos = top_params._pos,
+                            ._str = top_params._str,
+                            ._len = bottom_params._pos._x - top_params._pos._x,
+                            ._style = top_params._style,
+                        }));
+
+                        top_instrs.append(Instruction::createInsertString({
+                            ._pos = bottom_params._pos,
+                            ._str = top_params._str + bottom_params._pos._x - top_params._pos._x,
+                            ._len = bottom_params._len,
+                            ._style = StyleContainer::createValue(applyColorModifier(top_params._style.value(), bottom_params._style.value())),
+                        }));
+
+                        top_instrs.append(Instruction::createInsertString({
+                            ._pos = {bottom_end, top_params._pos._y},
+                            ._str = top_params._str + top_end - bottom_end,
+                            ._len = top_end - bottom_end,
+                            ._style = top_params._style,
+                        }));
+
+                        instrs.nodeErase(bottom_node);
+                    } else {
+                        top_instrs.append(Instruction::createInsertString({
+                            ._pos = top_params._pos,
+                            ._str = top_params._str,
+                            ._len = bottom_params._pos._x - top_params._pos._x,
+                            ._style = top_params._style,
+                        }));
+
+                        top_instrs.append(Instruction::createInsertString({
+                            ._pos = bottom_params._pos,
+                            ._str = top_params._str + bottom_params._pos._x - top_params._pos._x,
+                            ._len = top_end - bottom_params._pos._x,
+                            ._style = StyleContainer::createValue(applyColorModifier(top_params._style.value(), bottom_params._style.value())),
+                        }));
+
+                        bottom_instrs.append(Instruction::createInsertString({
+                            ._pos = {top_end, bottom_params._pos._y},
+                            ._str = bottom_params._str + top_end - bottom_params._pos._x,
+                            ._len = bottom_end - top_end,
+                            ._style = bottom_params._style,
+                        }));
+                    }
+                } else {
+                    if(top_end < bottom_end) {
+                        bottom_instrs.append(Instruction::createInsertString({
+                            ._pos = bottom_params._pos,
+                            ._str = bottom_params._str,
+                            ._len = top_params._pos._x - bottom_params._pos._x,
+                            ._style = bottom_params._style,
+                        }));
+
+                        top_instrs.append(Instruction::createInsertString({
+                            ._pos = top_params._pos,
+                            ._str = top_params._str,
+                            ._len = top_params._len,
+                            ._style = StyleContainer::createValue(applyColorModifier(top_params._style.value(), bottom_params._style.value())),
+                        }));
+
+                        bottom_instrs.append(Instruction::createInsertString({
+                            ._pos = {top_end, bottom_params._pos._y},
+                            ._str = bottom_params._str + top_end - bottom_params._pos._x,
+                            ._len = bottom_end - top_end,
+                            ._style = bottom_params._style,
+                        }));
+                    } else {
+                        bottom_instrs.append(Instruction::createInsertString({
+                            ._pos = bottom_params._pos,
+                            ._str = bottom_params._str,
+                            ._len = top_params._pos._x - bottom_params._pos._x,
+                            ._style = bottom_params._style,
+                        }));
+
+                        top_instrs.append(Instruction::createInsertString({
+                            ._pos = top_params._pos,
+                            ._str = top_params._str,
+                            ._len = bottom_end - top_params._pos._x,
+                            ._style = StyleContainer::createValue(applyColorModifier(top_params._style.value(), bottom_params._style.value())),
+                        }));
+
+                        top_instrs.append(Instruction::createInsertString({
+                            ._pos = {bottom_end, top_params._pos._y},
+                            ._str = top_params._str + bottom_end - top_params._pos._x,
+                            ._len = top_end - bottom_end,
+                            ._style = top_params._style,
+                        }));
+                    }
+                }
+            } else {
+                if(top_params._pos._x < bottom_params._pos._x) {
+                    if(top_end > bottom_end) {
+                        instrs.nodeErase(bottom_node);
+                        return;
+                    }
+                } else {
+                    if(top_end < bottom_end) {
+
+                    }
+                }
+            }
+        } break;
+    }
+
+    if(top_instrs._len > 0) {
+        auto top_items = top_instrs.takeItems();
+        instrs.nodeReplaceMulti(top_items, top_node);
+    }
+
+    if(bottom_instrs._len > 0) {
+        auto bottom_items = bottom_instrs.takeItems();
+        instrs.nodeReplaceMulti(bottom_items, bottom_node);
+    }
+    // front
+    // middle
+    // back
 }
 
 static void submit(LinkedList<Instruction>& intermediate, ArrayList<ControlSeq::Instruction, Dynamic>& esc, State& state) {
@@ -707,127 +855,6 @@ static void submit(LinkedList<Instruction>& intermediate, ArrayList<ControlSeq::
 
         cur = cur->_next;
     }
-}
-
-static void resolveCharOnStringOverdraw(InstrNode drawer, InstrNode drawee, InstrList& intermediate) {
-    const auto& drawer_instr = drawer->_value;
-    assert(drawer_instr._type == InstrType::InsertChar);
-    const auto& drawer_params = drawer_instr._params.InsertChar;
-
-    auto& drawee_instr = drawee->_value;
-    assert(drawee_instr._type == InstrType::InsertString);
-    auto& drawee_params = drawee_instr._params.InsertString;
-
-    assert(drawee_params._len > 0);
-
-    if(drawer_params._pos._x == drawee_params._pos._x) {
-        drawee_params._str += 1;
-    } else if(drawer_params._pos._x == drawee_params._pos._x + drawee_params._len) {
-        drawee_params._len -= 1;
-    } else {
-        const size_t index = drawer_params._pos._x - drawee_params._pos._x;
-
-        const auto new_instr = Instruction::createInsertString({
-            ._pos = {._x = drawee_params._pos._x + index + 1, ._y = drawee_params._pos._y},
-            ._str = drawee_params._str + index + 1,
-            ._len = drawee_params._len - index - 1,
-        });
-
-        drawee_params._len = index;
-
-        intermediate.nodeAppend(new_instr, drawee);
-    }
-}
-
-static void resolveStringOnStringOverdraw(InstrNode drawer, InstrNode drawee, InstrList& intermediate) {
-    const auto& drawer_instr = drawer->_value;
-    assert(drawer_instr._type == InstrType::InsertString);
-    const auto& drawer_params = drawer_instr._params.InsertString;
-
-    auto& drawee_instr = drawee->_value;
-    assert(drawer_instr._type == InstrType::InsertString);
-    auto& drawee_params = drawee_instr._params.InsertString;
-
-    const size_t drawer_end_i = (drawer_params._pos._x + drawer_params._len);
-    const size_t drawee_end_i = (drawee_params._pos._x + drawee_params._len);
-
-    if(drawer_params._pos._x <= drawee_params._pos._x) {
-        if(drawer_end_i > drawee_end_i) {
-            intermediate.nodeErase(drawee);
-        } else {
-            const size_t n = drawer_end_i - drawee_params._pos._x;
-
-            drawee_params._pos._x += n;
-            drawee_params._str += n;
-            drawee_params._len -= n;
-        }
-    } else if(drawer_end_i >= drawee_end_i) {
-        drawee_params._len -= drawee_end_i - drawer_params._pos._x;
-    } else {
-        const size_t index = drawer_params._pos._x - drawee_params._pos._x;
-
-        const auto new_instr = Instruction::createInsertString({
-            ._pos = {._x = drawee_params._pos._x + index + 1, ._y = drawee_params._pos._y},
-            ._str = drawee_params._str + index + drawer_params._len,
-            ._len = drawee_params._len - (index + drawer_params._len),
-        });
-
-        drawee_params._len = index;
-
-        intermediate.nodeAppend(new_instr, drawee);
-    }
-}
-
-static void resolveCharOnAnyOverdraw(InstrNode drawer, InstrNode drawee, InstrList& intermediate) {
-    const auto& drawee_instr = drawee->_value;
-
-    switch(drawee_instr._type) {
-        case InstrType::InsertChar: {
-            intermediate.nodeErase(drawee);
-        } break;
-        case InstrType::InsertString: {
-            resolveCharOnStringOverdraw(drawer, drawee, intermediate);
-        } break;
-    }
-}
-
-static void resolveStringOnAnyOverdraw(InstrNode drawer, InstrNode drawee, InstrList& intermediate) {
-    const auto& drawer_instr = drawer->_value;
-    assert(drawer_instr._type == InstrType::InsertString);
-    const auto& drawer_params = drawer_instr._params.InsertString;
-
-    const auto& drawee_instr = drawee->_value;
-
-    switch(drawee_instr._type) {
-        case InstrType::InsertChar: {
-            intermediate.nodeErase(drawee);
-        } break;
-        case InstrType::InsertString: {
-            resolveStringOnStringOverdraw(drawer, drawee, intermediate);
-        } break;
-        case InstrType::ClearArea: {
-            const auto& drawee_params = drawee_instr._params.ClearArea;
-
-            InstrNode lines_front = expand(drawee, intermediate)._front;
-
-            InstrNode overdraw_line = getNodeForwards(lines_front, drawer_params._pos._y - drawer_params._pos._y);
-
-            resolveStringOnStringOverdraw(drawer, overdraw_line, intermediate);
-        } break;
-    }
-}
-
-static void resolveOverdraw(InstrNode drawer, InstrNode drawee, InstrList& intermediate) {
-    auto& drawer_instr = drawer->_value;
-
-    switch(drawer_instr._type) {
-        case InstrType::InsertChar: {
-            resolveCharOnAnyOverdraw(drawer, drawee, intermediate);
-        } break;
-    }
-}
-
-static void optOverdraw(LinkedList<Instruction>& intermediate) {
 }
 
 } // namespace Intermediary
