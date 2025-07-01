@@ -1,12 +1,17 @@
 
-source := src/main.cpp include/*
+source := examples/bouncing-box.cpp include/*
 
-build/main: $(source) build
-	# clang src/main.cpp -o build/main -Iinclude -std=c++20 -lstdc++ -lm -g -Wall -fsanitize=address
-	clang -D_DEBUG=1 src/main.cpp -o build/main -Iinclude -std=c++20 -lstdc++ -lm -g -Wall -fsanitize=address
+.PHONY build/bouncing-box: $(source) build
+	clang -D_DEBUG=1 examples/bouncing-box.cpp -o build/bouncing-box -Iinclude -std=c++20 -lstdc++ -lm -g -Wall -fsanitize=address
+
+.PHONY build/colors: $(source) build
+	clang -D_DEBUG=1 examples/colors.cpp -o build/colors -Iinclude -std=c++20 -lstdc++ -lm -g -Wall -fsanitize=address
 
 build:
-	mkdir build
+	mkdir -p build
 
-run: build/main
-	build/main
+bouncing-box: build/bouncing-box
+	build/bouncing-box
+
+colors: build/colors
+	build/colors

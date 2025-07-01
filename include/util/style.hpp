@@ -1,10 +1,12 @@
 #pragma once
 
 #include "bits.hpp"
-#include "helpers.hpp"
+
+#include "util/range.hpp"
+#include "util/color.hpp"
 
 #include <cstdint>
-#include <utility>
+#include <cstdio>
 
 namespace Tesix {
 
@@ -19,11 +21,16 @@ enum class StyleEncoding {
     // RCIAFM // Reduced Color Increased Alpha Full Modifier Without Font
 };
 
-static inline StyleEncoding getEncoding(const uint64_t style) {
+static inline StyleEncoding getEncoding(
+    const uint64_t style
+) {
     return static_cast<StyleEncoding>(getBits(style, Range::fromFor(62, 2)));
 }
 
-static inline void setEnconding(uint64_t& style, const StyleEncoding encoding) {
+static inline void setEnconding(
+    uint64_t& style,
+    const StyleEncoding encoding
+) {
     setBitRangeTo(style, static_cast<uint8_t>(encoding), Range::fromFor(62, 2));
 }
 
@@ -35,171 +42,271 @@ enum class ColorMode {
 
 namespace FCFM {
 
-static inline uint8_t getFCR(const uint32_t color) {
+static inline uint8_t getFCR(
+    const uint32_t color
+) {
     return getBits(color, Range::fromFor(0, 8));
 }
 
-static inline uint8_t getFCG(const uint32_t color) {
+static inline uint8_t getFCG(
+    const uint32_t color
+) {
     return getBits(color, Range::fromFor(8, 8));
 }
 
-static inline uint8_t getFCB(const uint32_t color) {
+static inline uint8_t getFCB(
+    const uint32_t color
+) {
     return getBits(color, Range::fromFor(16, 8));
 }
 
-static inline uint8_t getFCA(const uint32_t color) {
+static inline uint8_t getFCA(
+    const uint32_t color
+) {
     return getBits(color, Range::fromFor(24, 4));
 }
 
-static inline void setFCR(uint32_t& color, const uint8_t value) {
+static inline void setFCR(
+    uint32_t& color,
+    const uint8_t value
+) {
     setBitRangeTo(color, value, Range::fromFor(0, 8));
 }
 
-static inline void setFCG(uint32_t& color, const uint8_t value) {
+static inline void setFCG(
+    uint32_t& color,
+    const uint8_t value
+) {
     setBitRangeTo(color, value, Range::fromFor(8, 8));
 }
 
-static inline void setFCB(uint32_t& color, const uint8_t value) {
+static inline void setFCB(
+    uint32_t& color,
+    const uint8_t value
+) {
     setBitRangeTo(color, value, Range::fromFor(16, 8));
 }
 
-static inline void setFCA(uint32_t& color, const uint8_t value) {
+static inline void setFCA(
+    uint32_t& color,
+    const uint8_t value
+) {
     setBitRangeTo(color, value, Range::fromFor(14, 4));
 }
 
-static inline ColorMode getFgMode(const uint64_t style) {
+static inline ColorMode getFgMode(
+    const uint64_t style
+) {
     return static_cast<ColorMode>(getBits(style, Range::fromFor(24, 2)));
 }
 
-static inline uint8_t getPFg(const uint64_t style) {
+static inline uint8_t getPFg(
+    const uint64_t style
+) {
     return getBits(style, Range::fromFor(0, 4));
 }
 
-static inline uint32_t getFCFg(const uint64_t style) {
+static inline uint32_t getFCFg(
+    const uint64_t style
+) {
     return getBits(style, Range::fromFor(0, 24));
 }
 
-static inline uint8_t getFCFgR(const uint64_t style) {
+static inline uint8_t getFCFgR(
+    const uint64_t style
+) {
     return getFCR(getFCFg(style));
 }
 
-static inline uint8_t getFCFgG(const uint64_t style) {
+static inline uint8_t getFCFgG(
+    const uint64_t style
+) {
     return getFCG(getFCFg(style));
 }
 
-static inline uint8_t getFCFgB(const uint64_t style) {
+static inline uint8_t getFCFgB(
+    const uint64_t style
+) {
     return getFCB(getFCFg(style));
 }
 
-static inline ColorMode getBgMode(const uint64_t style) {
+static inline ColorMode getBgMode(
+    const uint64_t style
+) {
     return static_cast<ColorMode>(getBits(style, Range::fromFor(54, 2)));
 }
 
-static inline uint8_t getPBg(const uint64_t style) {
+static inline uint8_t getPBg(
+    const uint64_t style
+) {
     return getBits(style, Range::fromFor(26, 4));
 }
 
-static inline uint32_t getFCBg(const uint64_t style) {
+static inline uint32_t getFCBg(
+    const uint64_t style
+) {
     return getBits(style, Range::fromFor(26, 28));
 }
 
-static inline uint8_t getFCBgR(const uint64_t style) {
+static inline uint8_t getFCBgR(
+    const uint64_t style
+) {
     return getFCR(getFCBg(style));
 }
 
-static inline uint8_t getFCBgG(const uint64_t style) {
+static inline uint8_t getFCBgG(
+    const uint64_t style
+) {
     return getFCG(getFCBg(style));
 }
 
-static inline uint8_t getFCBgB(const uint64_t style) {
+static inline uint8_t getFCBgB(
+    const uint64_t style
+) {
     return getFCB(getFCBg(style));
 }
 
-static inline uint8_t getFCBgA(const uint64_t style) {
+static inline uint8_t getFCBgA(
+    const uint64_t style
+) {
     return getFCA(getFCBg(style));
 }
 
-static inline bool getBold(const uint64_t style) {
+static inline bool getBold(
+    const uint64_t style
+) {
     return getBit(style, 56);
 }
 
-static inline bool getItalic(const uint64_t style) {
+static inline bool getItalic(
+    const uint64_t style
+) {
     return getBit(style, 57);
 }
 
-static inline bool getUnderlined(const uint64_t style) {
+static inline bool getUnderlined(
+    const uint64_t style
+) {
     return getBit(style, 58);
 }
 
-static inline bool getBlinking(const uint64_t style) {
+static inline bool getBlinking(
+    const uint64_t style
+) {
     return getBit(style, 59);
 }
 
-static inline bool getReversed(const uint64_t style) {
+static inline bool getReversed(
+    const uint64_t style
+) {
     return getBit(style, 60);
 }
 
-static inline bool getStrikethrough(const uint64_t style) {
+static inline bool getStrikethrough(
+    const uint64_t style
+) {
     return getBit(style, 61);
 }
 
-static inline void setFgMode(uint64_t& style, const ColorMode mode) {
+static inline void setFgMode(
+    uint64_t& style,
+    const ColorMode mode
+) {
     setBitRangeTo(style, static_cast<uint8_t>(mode), Range::fromFor(24, 2));
 }
 
-static inline void setPFg(uint64_t& style, const uint8_t value) {
+static inline void setPFg(
+    uint64_t& style,
+    const uint8_t value
+) {
     assert(value < 16);
 
     setBitRangeTo(style, value, Range::fromFor(0, 4));
 }
 
-static inline void setFCFg(uint64_t& style, const uint32_t value) {
+static inline void setFCFg(
+    uint64_t& style,
+    const uint32_t value
+) {
     setBitRangeTo(style, value, Range::fromFor(0, 24));
 }
 
-static inline void setFCFgR(uint64_t& style, const uint8_t value) {
+static inline void setFCFgR(
+    uint64_t& style,
+    const uint8_t value
+) {
     setBitRangeTo(style, value, Range::fromFor(0, 8));
 }
 
-static inline void setFCFgG(uint64_t& style, const uint8_t value) {
+static inline void setFCFgG(
+    uint64_t& style,
+    const uint8_t value
+) {
     setBitRangeTo(style, value, Range::fromFor(8, 8));
 }
 
-static inline void setFCFgB(uint64_t& style, const uint8_t value) {
+static inline void setFCFgB(
+    uint64_t& style,
+    const uint8_t value
+) {
     setBitRangeTo(style, value, Range::fromFor(16, 8));
 }
 
-static inline void setBgMode(uint64_t& style, const ColorMode mode) {
+static inline void setBgMode(
+    uint64_t& style,
+    const ColorMode mode
+) {
     setBitRangeTo(style, static_cast<uint8_t>(mode), Range::fromFor(54, 2));
 }
 
-static inline void setPBg(uint64_t& style, const uint8_t value) {
+static inline void setPBg(
+    uint64_t& style,
+    const uint8_t value
+) {
     assert(value < 16);
 
     setBitRangeTo(style, value, Range::fromFor(26, 4));
 }
 
-static inline void setFCBg(uint64_t& style, const uint32_t value) {
+static inline void setFCBg(
+    uint64_t& style,
+    const uint32_t value
+) {
     setBitRangeTo(style, value, Range::fromFor(26, 28));
 }
 
-static inline void setFCBgR(uint64_t& style, const uint8_t value) {
+static inline void setFCBgR(
+    uint64_t& style,
+    const uint8_t value
+) {
     setBitRangeTo(style, value, Range::fromFor(26, 8));
 }
 
-static inline void setFCBgG(uint64_t& style, const uint8_t value) {
+static inline void setFCBgG(
+    uint64_t& style,
+    const uint8_t value
+) {
     setBitRangeTo(style, value, Range::fromFor(34, 8));
 }
 
-static inline void setFCBgB(uint64_t& style, const uint8_t value) {
+static inline void setFCBgB(
+    uint64_t& style,
+    const uint8_t value
+) {
     setBitRangeTo(style, value, Range::fromFor(42, 8));
 }
 
-static inline void setFCBgA(uint64_t& style, const uint8_t value) {
+static inline void setFCBgA(
+    uint64_t& style,
+    const uint8_t value
+) {
     setBitRangeTo(style, value, Range::fromFor(50, 4));
 }
 
-static inline void setBold(uint64_t& style, const bool value) {
+static inline void setBold(
+    uint64_t& style,
+    const bool value
+) {
     if(value) {
         setBit(style, 56);
     } else {
@@ -207,7 +314,10 @@ static inline void setBold(uint64_t& style, const bool value) {
     }
 }
 
-static inline void setItalic(uint64_t& style, const bool value) {
+static inline void setItalic(
+    uint64_t& style,
+    const bool value
+) {
     if(value) {
         setBit(style, 57);
     } else {
@@ -215,7 +325,10 @@ static inline void setItalic(uint64_t& style, const bool value) {
     }
 }
 
-static inline void setUnderlined(uint64_t& style, const bool value) {
+static inline void setUnderlined(
+    uint64_t& style,
+    const bool value
+) {
     if(value) {
         setBit(style, 58);
     } else {
@@ -223,7 +336,10 @@ static inline void setUnderlined(uint64_t& style, const bool value) {
     }
 }
 
-static inline void setBlinking(uint64_t& style, const bool value) {
+static inline void setBlinking(
+    uint64_t& style,
+    const bool value
+) {
     if(value) {
         setBit(style, 59);
     } else {
@@ -231,7 +347,10 @@ static inline void setBlinking(uint64_t& style, const bool value) {
     }
 }
 
-static inline void setReversed(uint64_t& style, const bool value) {
+static inline void setReversed(
+    uint64_t& style,
+    const bool value
+) {
     if(value) {
         setBit(style, 60);
     } else {
@@ -239,7 +358,10 @@ static inline void setReversed(uint64_t& style, const bool value) {
     }
 }
 
-static inline void setStrikethrough(uint64_t& style, const bool value) {
+static inline void setStrikethrough(
+    uint64_t& style,
+    const bool value
+) {
     if(value) {
         setBit(style, 61);
     } else {
@@ -249,52 +371,31 @@ static inline void setStrikethrough(uint64_t& style, const bool value) {
 
 } // namespace FCFM
 
-struct FCFMFgFC {
-    uint8_t _r = 255;
-    uint8_t _g = 255;
-    uint8_t _b = 255;
-
-    bool operator==(const FCFMFgFC& other) const {
-        return _r == other._r && _g == other._g && _b == other._b;
-    }
-};
-
-union FCFMFgUnion {
-    FCFMFgFC FC;
+union FCFMFgU {
+    Color24 FC;
     uint8_t P;
 };
 
 struct FCFMFg {
     ColorMode _tag = ColorMode::Default;
-    FCFMFgUnion _value;
+    FCFMFgU _value;
 };
 
-union Fg {
+union Foreground {
     FCFMFg FCFM = {};
 };
 
-struct FCFMBgFC {
-    uint8_t _r = 0;
-    uint8_t _g = 0;
-    uint8_t _b = 0;
-    uint8_t _a = 127;
-
-    bool operator==(const FCFMBgFC& other) const {
-        return _r == other._r && _g == other._g && _b == other._b && _a == other._a;
-    }
-};
-
-union FCFMBgUnion {
-    FCFMBgFC FC;
+union FCFMBgU {
+    Color32 FC;
     uint8_t P;
 };
 
 struct FCFMBg {
     ColorMode _tag = ColorMode::Default;
-    FCFMBgUnion _value;
+    FCFMBgU _value;
 };
 
-union Bg {
+union Background {
     FCFMBg FCFM = {};
 };
 
@@ -303,29 +404,24 @@ struct FCFMMod {
     bool _italic = false;
     bool _underlined = false;
     bool _blinking = false;
-    bool _reversed = false;
+    bool _reverse = false;
     bool _strikethrough = false;
 };
 
-union Mod {
+union Modifiers {
     FCFMMod FCFM = {};
-};
-
-struct FullColor {
-    uint8_t _r;
-    uint8_t _g;
-    uint8_t _b;
-    uint8_t _a;
 };
 
 struct Style {
     StyleEncoding _tag;
 
-    Fg _fg;
-    Bg _bg;
-    Mod _mod;
+    Foreground _fg;
+    Background _bg;
+    Modifiers _mod;
 
-    static Style fromEncoding(const uint64_t style) {
+    static Style fromEncoding(
+        const uint64_t style
+    ) {
         switch(getEncoding(style)) {
             case StyleEncoding::FCFM: {
                 FCFMFg fg = {};
@@ -374,7 +470,7 @@ struct Style {
                     ._italic = FCFM::getItalic(style),
                     ._underlined = FCFM::getUnderlined(style),
                     ._blinking = FCFM::getBlinking(style),
-                    ._reversed = FCFM::getReversed(style),
+                    ._reverse = FCFM::getReversed(style),
                     ._strikethrough = FCFM::getStrikethrough(style),
                 };
 
@@ -438,7 +534,7 @@ struct Style {
                 FCFM::setItalic(style, _mod.FCFM._italic);
                 FCFM::setUnderlined(style, _mod.FCFM._underlined);
                 FCFM::setBlinking(style, _mod.FCFM._blinking);
-                FCFM::setReversed(style, _mod.FCFM._reversed);
+                FCFM::setReversed(style, _mod.FCFM._reverse);
                 FCFM::setStrikethrough(style, _mod.FCFM._strikethrough);
             } break;
         }
@@ -446,12 +542,16 @@ struct Style {
         return style;
     }
 
-    inline Style& mode(const StyleEncoding mode) {
+    inline Style& mode(
+        const StyleEncoding mode
+    ) {
         _tag = mode;
         return *this;
     }
 
-    inline Style& fgFullColor(const FullColor& value) {
+    inline Style& fgFullColor(
+        const Color32& value
+    ) {
         switch(_tag) {
             case StyleEncoding::FCFM: {
                 _fg.FCFM._tag = ColorMode::FullColor;
@@ -465,7 +565,9 @@ struct Style {
         return *this;
     }
 
-    inline Style& fgPalette(const uint8_t value) {
+    inline Style& fgPalette(
+        const uint8_t value
+    ) {
         switch(_tag) {
             case StyleEncoding::FCFM: {
                 _fg.FCFM._tag = ColorMode::Palette;
@@ -487,7 +589,9 @@ struct Style {
         return *this;
     }
 
-    inline Style& bgFullColor(const FullColor& value) {
+    inline Style& bgFullColor(
+        const Color32& value
+    ) {
         switch(_tag) {
             case StyleEncoding::FCFM: {
                 _bg.FCFM._tag = ColorMode::FullColor;
@@ -502,7 +606,9 @@ struct Style {
         return *this;
     }
 
-    inline Style& bgPalette(const uint8_t value) {
+    inline Style& bgPalette(
+        const uint8_t value
+    ) {
         switch(_tag) {
             case StyleEncoding::FCFM: {
                 _bg.FCFM._tag = ColorMode::Palette;
@@ -523,7 +629,9 @@ struct Style {
         return *this;
     }
 
-    inline Style& bold(const bool value = true) {
+    inline Style& bold(
+        const bool value = true
+    ) {
         switch(_tag) {
             case StyleEncoding::FCFM: {
                 _mod.FCFM._bold = value;
@@ -533,7 +641,9 @@ struct Style {
         return *this;
     }
 
-    inline Style& italic(const bool value = true) {
+    inline Style& italic(
+        const bool value = true
+    ) {
         switch(_tag) {
             case StyleEncoding::FCFM: {
                 _mod.FCFM._italic = value;
@@ -543,7 +653,9 @@ struct Style {
         return *this;
     }
 
-    inline Style& underlined(const bool value = true) {
+    inline Style& underlined(
+        const bool value = true
+    ) {
         switch(_tag) {
             case StyleEncoding::FCFM: {
                 _mod.FCFM._underlined = value;
@@ -553,7 +665,9 @@ struct Style {
         return *this;
     }
 
-    inline Style& blinking(const bool value = true) {
+    inline Style& blinking(
+        const bool value = true
+    ) {
         switch(_tag) {
             case StyleEncoding::FCFM: {
                 _mod.FCFM._blinking = value;
@@ -563,17 +677,21 @@ struct Style {
         return *this;
     }
 
-    inline Style& reverse(const bool value = true) {
+    inline Style& reverse(
+        const bool value = true
+    ) {
         switch(_tag) {
             case StyleEncoding::FCFM: {
-                _mod.FCFM._reversed = value;
+                _mod.FCFM._reverse = value;
             } break;
         }
 
         return *this;
     }
 
-    inline Style& strikethrough(const bool value = true) {
+    inline Style& strikethrough(
+        const bool value = true
+    ) {
         switch(_tag) {
             case StyleEncoding::FCFM: {
                 _mod.FCFM._strikethrough = value;
@@ -583,8 +701,6 @@ struct Style {
         return *this;
     }
 };
-
-} // namespace Style
 
 enum class StyleContainerTag {
     Value,
@@ -600,11 +716,15 @@ struct StyleContainer {
     StyleContainerTag _tag;
     StyleContainerU _value;
 
-    static inline StyleContainer createPtr(const uint64_t* style) {
+    static inline StyleContainer createPtr(
+        const uint64_t* style
+    ) {
         return {._tag = StyleContainerTag::Ptr, ._value = {.P = style}};
     }
 
-    static inline StyleContainer createValue(const uint64_t style) {
+    static inline StyleContainer createValue(
+        const uint64_t style
+    ) {
         return {._tag = StyleContainerTag::Value, ._value = {.V = style}};
     }
 
@@ -620,5 +740,6 @@ struct StyleContainer {
     }
 };
 
+} // namespace Style
 
 } // namespace Tesix

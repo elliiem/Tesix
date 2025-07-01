@@ -4,15 +4,16 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <iterator>
-#include <optional>
-#include <utility>
+#include <stdexcept>
 
 namespace Tesix {
+
+namespace Area {
 
 struct Box;
 struct FloatingBox;
 struct Selection;
+struct Text;
 
 template<typename T>
 static constexpr bool is_box_v = false;
@@ -36,17 +37,46 @@ template<typename T>
 concept AnySelection = is_selection_v<T>;
 
 template<typename T>
-concept AnyArea = is_box_v<T> || is_selection_v<T>;
+static constexpr bool is_text_area_v = false;
+
+template<>
+static constexpr bool is_text_area_v<Text> = true;
+
+template<typename T>
+concept AnyArea = is_box_v<T> || is_selection_v<T> || is_text_area_v<Text>;
 
 struct Position {
     size_t _x;
     size_t _y;
 
     template<AnyArea T>
-    inline bool isInside(const T& area) const;
+    inline bool isInside(
+        const T& area
+    ) const;
 
-    inline Position operator+(const Position& other) const {
+    inline Position operator+(
+        const Position& other
+    ) const {
         return {._x = _x + other._x, ._y = _y + other._y};
+    }
+
+    inline bool operator==(
+        const Position& other
+    ) const {
+        return _x == other._x && _y == other._y;
+    }
+};
+
+struct Text {
+    Position _pos;
+    uintmax_t _len;
+
+    inline Position left() const {
+        return _pos;
+    }
+
+    inline Position right() const {
+        return {_pos._x + _len - 1, _pos._y};
     }
 };
 
@@ -83,15 +113,29 @@ struct Box {
     }
 
     template<AnyArea T>
-    inline bool contains(const T& child) const;
+    inline bool contains(
+        const T& other
+    ) const;
 
     template<>
-    inline bool contains(const FloatingBox& child) const;
+    inline bool contains(
+        const FloatingBox& other
+    ) const;
 
     template<>
-    inline bool contains(const Box& child) const;
+    inline bool contains(
+        const Box& other
+    ) const;
 
-    inline bool contains(const Selection& child, const Box& term) const;
+    inline bool contains(
+        const Selection& other,
+        const Box& term
+    ) const;
+
+    template<>
+    inline bool contains(
+        const Text& other
+    ) const;
 
     inline size_t size() {
         return _width * _height;
@@ -131,15 +175,24 @@ struct FloatingBox {
     }
 
     template<AnyArea T>
-    inline bool contains(const T& child) const;
+    inline bool contains(
+        const T& child
+    ) const;
 
     template<>
-    inline bool contains(const Box& child) const;
+    inline bool contains(
+        const Box& child
+    ) const;
 
     template<>
-    inline bool contains(const FloatingBox& child) const;
+    inline bool contains(
+        const FloatingBox& child
+    ) const;
 
-    inline bool contains(const Selection& child, const Box& term) const;
+    inline bool contains(
+        const Selection& child,
+        const Box& term
+    ) const;
 
     inline size_t size() {
         return _box.size();
@@ -155,44 +208,72 @@ struct Selection {
     Position _end;
 
     template<AnyArea T>
-    inline bool contains(const T& child) const;
+    inline bool contains(
+        const T& child
+    ) const;
 
     template<>
-    inline bool contains(const Box& child) const;
+    inline bool contains(
+        const Box& child
+    ) const;
 
     template<>
-    inline bool contains(const FloatingBox& child) const;
+    inline bool contains(
+        const FloatingBox& child
+    ) const;
 
     template<>
-    inline bool contains(const Selection& child) const;
+    inline bool contains(
+        const Selection& child
+    ) const;
 };
 
 template<>
-inline bool Position::isInside(const FloatingBox& area) const {
+inline bool Position::isInside(
+    const FloatingBox& area
+) const {
     return (_x >= area._pos._x && _x <= area.right()) && (_y >= area._pos._y && _y <= area.bottom());
 }
 
 template<>
-inline bool Position::isInside(const Box& area) const {
+inline bool Position::isInside(
+    const Box& area
+) const {
     return _x < area._width && _y < area._height;
 }
 
 template<>
-inline bool Position::isInside(const Selection& area) const {
+inline bool Position::isInside(
+    const Selection& area
+) const {
     return _y >= area._start._y && _x >= area._start._x && _y <= area._end._y && _x <= area._end._x;
 }
 
 template<>
-inline bool FloatingBox::contains(const Box& child) const {
+inline bool Position::isInside(
+    const Text& area
+) const {
+    return _y == area._pos._y && _x >= area._pos._x && _x < area._pos._x + area._len;
+}
+
+template<>
+inline bool FloatingBox::contains(
+    const Box& child
+) const {
     return (_pos._x == 0 && child._width <= right()) && (_pos._y == 0 && child._height <= bottom());
 }
 
 template<>
-inline bool FloatingBox::contains(const FloatingBox& child) const {
+inline bool FloatingBox::contains(
+    const FloatingBox& child
+) const {
     return (child._pos._x >= _pos._x && child.right() <= right()) && (child._pos._y >= _pos._y && child.bottom() <= bottom());
 }
 
-inline bool FloatingBox::contains(const Selection& child, const Box& term) const {
+inline bool FloatingBox::contains(
+    const Selection& child,
+    const Box& term
+) const {
     const bool start_check = child._start.isInside(*this);
     const bool end_check = child._end.isInside(*this);
 
@@ -206,16 +287,23 @@ inline bool FloatingBox::contains(const Selection& child, const Box& term) const
 }
 
 template<>
-inline bool Box::contains(const Box& child) const {
+inline bool Box::contains(
+    const Box& child
+) const {
     return child._width <= _width && child._height <= _height;
 }
 
 template<>
-inline bool Box::contains(const FloatingBox& child) const {
+inline bool Box::contains(
+    const FloatingBox& child
+) const {
     return child.right() < _width && child.bottom() < _height;
 }
 
-inline bool Box::contains(const Selection& child, const Box& term) const {
+inline bool Box::contains(
+    const Selection& child,
+    const Box& term
+) const {
     const bool start_check = child._start.isInside(*this);
     const bool end_check = child._end.isInside(*this);
 
@@ -229,38 +317,122 @@ inline bool Box::contains(const Selection& child, const Box& term) const {
 }
 
 template<>
-inline bool Selection::contains(const Box& child) const {
+inline bool Box::contains(
+    const Text& other
+) const {
+    return other.left().isInside(*this) && other.right().isInside(*this);
+}
+
+template<>
+inline bool Selection::contains(
+    const Box& child
+) const {
     return child.topLeft().isInside(*this) && child.bottomRight().isInside(*this);
 }
 
 template<>
-inline bool Selection::contains(const FloatingBox& child) const {
+inline bool Selection::contains(
+    const FloatingBox& child
+) const {
     return child.topLeft().isInside(*this) && child.bottomRight().isInside(*this);
 }
 
 template<>
-inline bool Selection::contains(const Selection& child) const {
+inline bool Selection::contains(
+    const Selection& child
+) const {
     return child._start.isInside(*this) && child._end.isInside(*this);
 }
 
 template<AnyBox A, AnyBox B>
-static inline bool overlap(const A& a, const B& b) {
+static inline bool overlap(
+    const A& a,
+    const B& b
+) {
     return a.topLeft().isInside(b) || a.bottomLeft().isInside(b) || a.topRight().isInside(b) || a.bottomRight().isInside(b) ||
            b.topLeft().isInside(a) || b.bottomLeft().isInside(a) || b.topRight().isInside(a) || b.bottomRight().isInside(a);
 }
 
-template<AnyBox B>
-static inline bool overlap(const Selection& a, const B& b) {
-    return a._start.isInside(b) && a._end.isInside(b);
+
+static inline bool overlap(
+    const Text& a,
+    const Box& b
+) {
+    return a.left().isInside(b);
 }
 
-template<AnyBox A>
-static inline bool overlap(const A& a, const Selection& b) {
+static inline bool overlap(
+    const Box& a,
+    const Text& b
+) {
     return overlap(b, a);
 }
 
-static inline bool overlap(const Selection& a, const Selection& b) {
-    return a._start.isInside(b) && a._end.isInside(b);
+
+static inline bool overlap(
+    const Text& a,
+    const FloatingBox& b
+) {
+    const bool y_check = a._pos._y >= b._pos._y && a._pos._y < b.bottom();
+
+    return (y_check) && (a.left().isInside(b) || a.right()._x > b._pos._x);
+}
+
+static inline bool overlap(
+    const FloatingBox& a,
+    const Text& b
+) {
+    return overlap(b, a);
+}
+
+static inline bool overlap(
+    const Text& a,
+    const Text& b
+) {
+    return a.left().isInside(b) || a.right().isInside(b);
+}
+
+static inline bool overlap(
+    const Box& a,
+    const Selection& b
+) {
+    throw std::runtime_error("unimplemented");
+    return false;
+}
+
+static inline bool overlap(
+    const Selection& a,
+    const Box& b
+) {
+    throw std::runtime_error("unimplemented");
+    return false;
+}
+
+static inline bool overlap(
+    const FloatingBox& a,
+    const Selection& b
+) {
+    throw std::runtime_error("unimplemented");
+    return false;
+}
+
+static inline bool overlap(
+    const Selection& a,
+    const FloatingBox& b
+) {
+    throw std::runtime_error("unimplemented");
+    return false;
+}
+
+static inline bool overlap(
+    const Selection& a,
+    const Selection& b
+) {
+    throw std::runtime_error("unimplemented");
+    return false;
+}
+
+
 }
 
 } // namespace Tesix
